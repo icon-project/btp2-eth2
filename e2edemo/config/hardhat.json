@@ -1,0 +1,7 @@
+{
+	"name": "hardhat",
+	"contract": "solidity",
+	"endpoint": "http://localhost:8545",
+	"keystore": "./config/keystore/hardhat_keystore.json",
+	"keypass": "hardhat"
+}

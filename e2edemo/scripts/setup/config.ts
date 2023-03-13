@@ -24,7 +24,7 @@ export class Deployments {
       const json = JSON.parse(data.toString());
       this.instance = new this();
       this.instance.set('icon', json.icon);
-      this.instance.set('hardhat', json.hardhat);
+      this.instance.set('target', json.target);
     }
     return this.instance;
   }

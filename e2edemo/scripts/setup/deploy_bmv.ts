@@ -22,8 +22,9 @@ let netId = '';
 async function open_btp_network() {
   // open BTP network first before deploying BMV
   const icon = deployments.get('icon')
+  const target = deployments.get('target')
   const lastBlock = await iconNetwork.getLastBlock();
-  const netName = `hardhat-${lastBlock.height}`
+  const netName = `${target.network}-${lastBlock.height}`
   console.log(`ICON: open BTP network for ${netName}`)
   const gov = new Gov(iconNetwork);
   let govVersion
@@ -116,11 +117,11 @@ async function deploy_bmv() {
   icon.blockNum = lastBlock.height
   console.log(`Block number (${icon.network}): ${icon.blockNum}`);
 
-  // get last block number of hardhat
+  // get last block number of target
   const blockNum = await ethers.provider.getBlockNumber();
-  const hardhat = deployments.get('hardhat')
-  hardhat.blockNum = blockNum
-  console.log(`Block number (${hardhat.network}): ${hardhat.blockNum}`);
+  const target = deployments.get('target')
+  target.blockNum = blockNum
+  console.log(`Block number (${target.network}): ${target.blockNum}`);
 
   // deploy BMV-Bridge java module
   const bmvJar = JAVASCORE_PATH + '/bmv/bridge/build/libs/bmv-bridge-0.1.0-optimized.jar'
@@ -130,8 +131,8 @@ async function deploy_bmv() {
     content: content,
     params: {
       _bmc: icon.contracts.bmc,
-      _net: hardhat.network,
-      _offset: IconConverter.toHex(hardhat.blockNum)
+      _net: target.network,
+      _offset: IconConverter.toHex(target.blockNum)
     }
   })
   const result = await bmv.getTxResult(deployTxHash)
@@ -144,10 +145,10 @@ async function deploy_bmv() {
   if (bridgeMode) {
     // deploy BMV-Bridge solidity module
     const BMVBridge = await ethers.getContractFactory("BMV")
-    const bmvb = await BMVBridge.deploy(hardhat.contracts.bmcp, icon.network, icon.blockNum)
+    const bmvb = await BMVBridge.deploy(target.contracts.bmcp, icon.network, icon.blockNum)
     await bmvb.deployed()
-    hardhat.contracts.bmvb = bmvb.address
-    console.log(`Hardhat BMV-Bridge: deployed to ${bmvb.address}`);
+    target.contracts.bmvb = bmvb.address
+    console.log(`Target BMV-Bridge: deployed to ${bmvb.address}`);
   } else {
     // get firstBlockHeader via btp2 API
     const networkInfo = await iconNetwork.getBTPNetworkInfo(netId);
@@ -161,21 +162,21 @@ async function deploy_bmv() {
 
     // deploy BMV-BtpBlock solidity module
     const BMVBtp = await ethers.getContractFactory("BtpMessageVerifier")
-    const bmvBtp = await BMVBtp.deploy(hardhat.contracts.bmcp, icon.network, netTypeId, firstBlockHeader, '0x0')
+    const bmvBtp = await BMVBtp.deploy(target.contracts.bmcp, icon.network, netTypeId, firstBlockHeader, '0x0')
     await bmvBtp.deployed()
-    hardhat.contracts.bmv = bmvBtp.address
-    console.log(`Hardhat BMV: deployed to ${bmvBtp.address}`);
+    target.contracts.bmv = bmvBtp.address
+    console.log(`Target BMV: deployed to ${bmvBtp.address}`);
   }
 
   // update deployments
   deployments.set('icon', icon)
-  deployments.set('hardhat', hardhat)
+  deployments.set('target', target)
   deployments.save();
 }
 
 async function setup_bmv() {
   const icon = deployments.get('icon')
-  const hardhat = deployments.get('hardhat')
+  const target = deployments.get('target')
 
   // get the BTP address of ICON BMC
   const bmc = new BMC(iconNetwork, icon.contracts.bmc)
@@ -183,22 +184,22 @@ async function setup_bmv() {
   const bmcIconAddr = await bmc.getBtpAddress()
   console.log(`BTP address of ICON BMC: ${bmcIconAddr}`)
 
-  // get the BTP address of hardhat BMC
-  const bmcm = await ethers.getContractAt('BMCManagement', hardhat.contracts.bmcm)
-  const bmcp = await ethers.getContractAt('BMCPeriphery', hardhat.contracts.bmcp)
-  const bmcHardhatAddr = await bmcp.getBtpAddress()
-  console.log(`BTP address of Hardhat BMC: ${bmcHardhatAddr}`)
+  // get the BTP address of target BMC
+  const bmcm = await ethers.getContractAt('BMCManagement', target.contracts.bmcm)
+  const bmcp = await ethers.getContractAt('BMCPeriphery', target.contracts.bmcp)
+  const bmcTargetAddr = await bmcp.getBtpAddress()
+  console.log(`BTP address of Target BMC: ${bmcTargetAddr}`)
 
-  console.log(`ICON: addVerifier for ${hardhat.network}`)
-  await bmc.addVerifier(hardhat.network, bmv.address)
+  console.log(`ICON: addVerifier for ${target.network}`)
+  await bmc.addVerifier(target.network, bmv.address)
     .then((txHash) => bmc.getTxResult(txHash))
     .then((result) => {
       if (result.status != 1) {
         throw new Error(`ICON: failed to register BMV to BMC: ${result.txHash}`);
       }
     })
-  console.log(`ICON: addBTPLink for ${bmcHardhatAddr}`)
-  await bmc.addBTPLink(bmcHardhatAddr, netId)
+  console.log(`ICON: addBTPLink for ${bmcTargetAddr}`)
+  await bmc.addBTPLink(bmcTargetAddr, netId)
     .then((txHash) => bmc.getTxResult(txHash))
     .then((result) => {
       if (result.status != 1) {
@@ -206,7 +207,7 @@ async function setup_bmv() {
       }
     })
   console.log(`ICON: addRelay`)
-  await bmc.addRelay(bmcHardhatAddr, iconNetwork.wallet.getAddress())
+  await bmc.addRelay(bmcTargetAddr, iconNetwork.wallet.getAddress())
     .then((txHash) => bmc.getTxResult(txHash))
     .then((result) => {
       if (result.status != 1) {
@@ -214,25 +215,25 @@ async function setup_bmv() {
       }
     })
 
-  console.log(`Hardhat: addVerifier for ${icon.network}`)
+  console.log(`Target: addVerifier for ${icon.network}`)
   let bmvAddress;
   if (bridgeMode) {
-    const bmvb = await ethers.getContractAt('BMV', hardhat.contracts.bmvb)
+    const bmvb = await ethers.getContractAt('BMV', target.contracts.bmvb)
     bmvAddress = bmvb.address;
   } else {
-    const bmvBtp = await ethers.getContractAt('BtpMessageVerifier', hardhat.contracts.bmv)
+    const bmvBtp = await ethers.getContractAt('BtpMessageVerifier', target.contracts.bmv)
     bmvAddress = bmvBtp.address;
   }
   await bmcm.addVerifier(icon.network, bmvAddress)
     .then((tx) => {
       return tx.wait(1)
     });
-  console.log(`Hardhat: addLink: ${bmcIconAddr}`)
+  console.log(`Target: addLink: ${bmcIconAddr}`)
   await bmcm.addLink(bmcIconAddr)
     .then((tx) => {
       return tx.wait(1)
     });
-  console.log(`Hardhat: addRelay`)
+  console.log(`Target: addRelay`)
   const signers = await ethers.getSigners()
   await bmcm.addRelay(bmcIconAddr, signers[0].getAddress())
     .then((tx) => {

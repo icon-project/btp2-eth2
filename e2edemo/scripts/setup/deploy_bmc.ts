@@ -10,19 +10,21 @@ const deployments = new Deployments();
 
 async function deploy_java() {
   const iconNetwork = IconNetwork.getDefault(configJson.icon);
-  const BMC_NETWORK_ID = "0x" + iconNetwork.nid.toString(16) + ".icon"
-  console.log(`ICON: deploy BMC for ${BMC_NETWORK_ID}`)
+  const data = fs.readFileSync(configJson.icon);
+  const icon = JSON.parse(data.toString());
+  const BMC_NETWORK_ID = "0x" + iconNetwork.nid.toString(16) + ".icon";
+  console.log(`ICON: deploy BMC for ${BMC_NETWORK_ID}`);
 
-  const bmcJar = JAVASCORE_PATH + '/bmc/build/libs/bmc-0.1.0-optimized.jar'
-  const content = fs.readFileSync(bmcJar).toString('hex')
-  const bmc = new Contract(iconNetwork)
+  const bmcJar = JAVASCORE_PATH + '/bmc/build/libs/bmc-0.1.0-optimized.jar';
+  const content = fs.readFileSync(bmcJar).toString('hex');
+  const bmc = new Contract(iconNetwork);
   const deployTxHash = await bmc.deploy({
     content: content,
     params: {
       _net: BMC_NETWORK_ID
     }
-  })
-  const result = await bmc.getTxResult(deployTxHash)
+  });
+  const result = await bmc.getTxResult(deployTxHash);
   if (result.status != 1) {
     throw new Error(`BMC deployment failed: ${result.txHash}`);
   }
@@ -31,26 +33,31 @@ async function deploy_java() {
   deployments.set('icon', {
     'network': BMC_NETWORK_ID,
     'contracts': {
+      'type': icon.contract,
       'bmc': bmc.address
     }
-  })
+  });
 }
 
 async function deploy_solidity() {
-  const network = await ethers.provider.getNetwork()
-  const BMC_NETWORK_ID = "0x" + network.chainId.toString(16) + ".hardhat"
-  console.log(`Hardhat: deploy BMC modules for ${BMC_NETWORK_ID}`)
+  const data = fs.readFileSync(configJson.target);
+  const target = JSON.parse(data.toString());
+  const network = await ethers.provider.getNetwork();
+  const chainId = network.chainId.toString(16);
+  const name = target.name;
+  const BMC_NETWORK_ID = "0x" + chainId + "." + name;
+  console.log(`${name}: deploy BMC modules for ${BMC_NETWORK_ID}`);
 
   const BMCManagement = await ethers.getContractFactory("BMCManagement");
   const bmcm = await BMCManagement.deploy();
   await bmcm.deployed();
-  await bmcm.initialize()
+  await bmcm.initialize();
   console.log(`BMCManagement: deployed to ${bmcm.address}`);
 
   const BMCService = await ethers.getContractFactory("BMCService");
   const bmcs = await BMCService.deploy();
   await bmcs.deployed();
-  await bmcs.initialize(bmcm.address)
+  await bmcs.initialize(bmcm.address);
   console.log(`BMCService: deployed to ${bmcs.address}`);
 
   const BMCPeriphery = await ethers.getContractFactory("BMCPeriphery");
@@ -59,25 +66,26 @@ async function deploy_solidity() {
   await bmcp.initialize(BMC_NETWORK_ID, bmcm.address, bmcs.address);
   console.log(`BMCPeriphery: deployed to ${bmcp.address}`);
 
-  console.log('Hardhat: management.setBMCPeriphery');
+  console.log(`${name}: management.setBMCPeriphery`);
   await bmcm.setBMCPeriphery(bmcp.address)
     .then((tx) => {
       return tx.wait(1)
     });
-  console.log('Hardhat: management.setBMCService');
+  console.log(`${name}: management.setBMCService`);
   await bmcm.setBMCService(bmcs.address)
     .then((tx) => {
       return tx.wait(1)
     });
-  console.log('Hardhat: service.setBMCPeriphery');
+  console.log(`${name}: service.setBMCPeriphery`);
   await bmcs.setBMCPeriphery(bmcp.address)
     .then((tx) => {
       return tx.wait(1)
     });
 
-  deployments.set('hardhat', {
+  deployments.set('target', {
     'network': BMC_NETWORK_ID,
     'contracts': {
+      'type': target.contract,
       'bmcm': bmcm.address,
       'bmcs': bmcs.address,
       'bmcp': bmcp.address,

@@ -29,17 +29,17 @@ async function deploy_dapp() {
   console.log(`ICON DApp: deployed to ${dapp.address}`);
 
   // deploy DApp solidity
-  const hardhat = deployments.get('hardhat')
+  const target = deployments.get('target')
   const DAppSample = await ethers.getContractFactory("DAppProxySample")
   const dappSol = await DAppSample.deploy()
   await dappSol.deployed()
-  await dappSol.initialize(hardhat.contracts.xcall)
-  hardhat.contracts.dapp = dappSol.address
-  console.log(`Hardhat DApp: deployed to ${dappSol.address}`);
+  await dappSol.initialize(target.contracts.xcall)
+  target.contracts.dapp = dappSol.address
+  console.log(`Target DApp: deployed to ${dappSol.address}`);
 
   // update deployments
   deployments.set('icon', icon)
-  deployments.set('hardhat', hardhat)
+  deployments.set('target', target)
   deployments.save();
 }
 

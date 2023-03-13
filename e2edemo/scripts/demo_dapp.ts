@@ -79,11 +79,11 @@ function hexToString(data: string) {
 }
 
 function isIconChain(chain: any) {
-  return chain.network.includes('icon');
+  return chain.contracts.type == 'java';
 }
 
-function isHardhatChain(chain: any) {
-  return chain.network.includes('hardhat');
+function isEVMChain(chain: any) {
+  return chain.contracts.type == 'solidity';
 }
 
 async function sendMessageFromDApp(srcChain: any, dstChain: any, msg: string,
@@ -106,7 +106,7 @@ async function sendMessageFromDApp(srcChain: any, dstChain: any, msg: string,
         }
         return receipt;
       });
-  } else if (isHardhatChain(srcChain)) {
+  } else if (isEVMChain(srcChain)) {
     const xcallSrc = await ethers.getContractAt('CallService', srcChain.contracts.xcall);
     const fee = await xcallSrc.getFee(dstChain.network, false);
     console.log('fee=' + fee);
@@ -147,7 +147,7 @@ async function verifyCallMessageSent(srcChain: any, receipt: any, msg: string) {
       _sn: BigNumber.from(indexed[3]),
       _nsn: BigNumber.from(data[0])
     };
-  } else if (isHardhatChain(srcChain)) {
+  } else if (isEVMChain(srcChain)) {
     const xcallSrc = await ethers.getContractAt('CallService', srcChain.contracts.xcall);
     const logs = filterEvent(xcallSrc, xcallSrc.filters.CallMessageSent(), receipt);
     if (logs.length == 0) {
@@ -163,7 +163,7 @@ async function verifyCallMessageSent(srcChain: any, receipt: any, msg: string) {
 }
 
 async function checkCallMessage(srcChain: any, dstChain: any, sn: BigNumber) {
-  if (isHardhatChain(dstChain)) {
+  if (isEVMChain(dstChain)) {
     const xcallDst = await ethers.getContractAt('CallService', dstChain.contracts.xcall);
     const filterCM = xcallDst.filters.CallMessage(
       getBtpAddress(srcChain.network, srcChain.contracts.dapp),
@@ -204,7 +204,7 @@ async function checkCallMessage(srcChain: any, dstChain: any, sn: BigNumber) {
 }
 
 async function invokeExecuteCall(dstChain: any, reqId: BigNumber) {
-  if (isHardhatChain(dstChain)) {
+  if (isEVMChain(dstChain)) {
     const xcallDst = await ethers.getContractAt('CallService', dstChain.contracts.xcall);
     return await xcallDst.executeCall(reqId, {gasLimit: 15000000})
       .then((tx) => tx.wait(1))
@@ -231,7 +231,7 @@ async function invokeExecuteCall(dstChain: any, reqId: BigNumber) {
 
 async function verifyReceivedMessage(dstChain: any, receipt: any, msg: string) {
   let event;
-  if (isHardhatChain(dstChain)) {
+  if (isEVMChain(dstChain)) {
     const dappDst = await ethers.getContractAt('DAppProxySample', dstChain.contracts.dapp);
     const logs = filterEvent(dappDst, dappDst.filters.MessageReceived(), receipt);
     if (logs.length == 0) {
@@ -263,7 +263,7 @@ async function verifyReceivedMessage(dstChain: any, receipt: any, msg: string) {
 
 async function checkCallExecuted(dstChain: any, receipt: any, reqId: BigNumber, expectRevert: boolean) {
   let event;
-  if (isHardhatChain(dstChain)) {
+  if (isEVMChain(dstChain)) {
     const xcallDst = await ethers.getContractAt('CallService', dstChain.contracts.xcall);
     const logs = filterEvent(xcallDst, xcallDst.filters.CallExecuted(), receipt);
     if (logs.length == 0) {
@@ -310,7 +310,7 @@ async function checkResponseMessage(srcChain: any, sn: BigNumber, expectRevert: 
       _code: BigNumber.from(data[0]),
       _msg: data[1]
     }
-  } else if (isHardhatChain(srcChain)) {
+  } else if (isEVMChain(srcChain)) {
     const xcallSrc = await ethers.getContractAt('CallService', srcChain.contracts.xcall);
     const logs = await waitEvent(xcallSrc, xcallSrc.filters.ResponseMessage());
     if (logs.length == 0) {
@@ -330,7 +330,7 @@ async function checkResponseMessage(srcChain: any, sn: BigNumber, expectRevert: 
 }
 
 async function checkRollbackMessage(srcChain: any) {
-  if (isHardhatChain(srcChain)) {
+  if (isEVMChain(srcChain)) {
     const xcallSrc = await ethers.getContractAt('CallService', srcChain.contracts.xcall);
     const logs = await waitEvent(xcallSrc, xcallSrc.filters.RollbackMessage());
     if (logs.length == 0) {
@@ -353,7 +353,7 @@ async function checkRollbackMessage(srcChain: any) {
 }
 
 async function invokeExecuteRollback(srcChain: any, sn: BigNumber) {
-  if (isHardhatChain(srcChain)) {
+  if (isEVMChain(srcChain)) {
     const xcallSrc = await ethers.getContractAt('CallService', srcChain.contracts.xcall);
     return await xcallSrc.executeRollback(sn, {gasLimit: 15000000})
       .then((tx) => tx.wait(1))
@@ -380,7 +380,7 @@ async function invokeExecuteRollback(srcChain: any, sn: BigNumber) {
 
 async function verifyRollbackDataReceivedMessage(srcChain: any, receipt: any, rollback: string | undefined) {
   let event;
-  if (isHardhatChain(srcChain)) {
+  if (isEVMChain(srcChain)) {
     const dappSrc = await ethers.getContractAt('DAppProxySample', srcChain.contracts.dapp);
     const logs = filterEvent(dappSrc, dappSrc.filters.RollbackDataReceived(), receipt);
     if (logs.length == 0) {
@@ -427,7 +427,7 @@ async function checkRollbackExecuted(srcChain: any, receipt: any, sn: BigNumber)
       _code: BigNumber.from(data[0]),
       _msg: data[1]
     }
-  } else if (isHardhatChain(srcChain)) {
+  } else if (isEVMChain(srcChain)) {
     const xcallSrc = await ethers.getContractAt('CallService', srcChain.contracts.xcall);
     const logs = filterEvent(xcallSrc, xcallSrc.filters.RollbackExecuted(), receipt);
     if (logs.length == 0) {
@@ -508,12 +508,12 @@ async function show_banner() {
 }
 
 show_banner()
-  .then(() => sendCallMessage('icon', 'hardhat'))
-  .then(() => sendCallMessage('hardhat', 'icon'))
-  .then(() => sendCallMessage('icon', 'hardhat', "checkSuccessResponse", true))
-  .then(() => sendCallMessage('hardhat', 'icon', "checkSuccessResponse", true))
-  .then(() => sendCallMessage('icon', 'hardhat', "revertMessage", true))
-  .then(() => sendCallMessage('hardhat', 'icon', "revertMessage", true))
+  .then(() => sendCallMessage('icon', 'target'))
+  .then(() => sendCallMessage('target', 'icon'))
+  .then(() => sendCallMessage('icon', 'target', "checkSuccessResponse", true))
+  .then(() => sendCallMessage('target', 'icon', "checkSuccessResponse", true))
+  .then(() => sendCallMessage('icon', 'target', "revertMessage", true))
+  .then(() => sendCallMessage('target', 'icon', "revertMessage", true))
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;

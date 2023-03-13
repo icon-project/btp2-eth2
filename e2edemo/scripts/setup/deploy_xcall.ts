@@ -30,23 +30,23 @@ async function deploy_xcall() {
   console.log(`ICON xCall: deployed to ${xcall.address}`);
 
   // deploy xCall solidity module
-  const hardhat = deployments.get('hardhat')
+  const target = deployments.get('target')
   const CallSvc = await ethers.getContractFactory("CallService")
   const xcallSol = await CallSvc.deploy()
   await xcallSol.deployed()
-  await xcallSol.initialize(hardhat.contracts.bmcp)
-  hardhat.contracts.xcall = xcallSol.address
-  console.log(`Hardhat xCall: deployed to ${xcallSol.address}`);
+  await xcallSol.initialize(target.contracts.bmcp)
+  target.contracts.xcall = xcallSol.address
+  console.log(`Target xCall: deployed to ${xcallSol.address}`);
 
   // update deployments
   deployments.set('icon', icon)
-  deployments.set('hardhat', hardhat)
+  deployments.set('target', target)
   deployments.save();
 }
 
 async function setup_xcall() {
   const icon = deployments.get('icon')
-  const hardhat = deployments.get('hardhat')
+  const target = deployments.get('target')
 
   console.log("ICON: register xCall to BMC");
   const bmc = new BMC(iconNetwork, icon.contracts.bmc)
@@ -58,9 +58,9 @@ async function setup_xcall() {
       }
     })
 
-  console.log("Hardhat: register xCall to BMC");
-  const bmcm = await ethers.getContractAt('BMCManagement', hardhat.contracts.bmcm)
-  await bmcm.addService('xcall', hardhat.contracts.xcall);
+  console.log("Target: register xCall to BMC");
+  const bmcm = await ethers.getContractAt('BMCManagement', target.contracts.bmcm)
+  await bmcm.addService('xcall', target.contracts.xcall);
 }
 
 deploy_xcall()

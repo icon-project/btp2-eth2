@@ -1,3 +1,4 @@
 {
-	"icon": "./config/icon_btp.json"
+	"icon": "./config/icon_local.json",
+	"target": "./config/hardhat.json"
 }
