@@ -118,6 +118,7 @@ func newReceiver(s string, cfg chain.Config, l log.Logger) link.Receiver {
 		l.Fatalf("Not supported for chain:%s", s)
 		return nil
 	}
+	l.Debugf("newReceiver for %s is %+v", s, receiver)
 	return receiver
 }
 
@@ -135,6 +136,7 @@ func newSender(s string, srcCfg chain.BaseConfig, dstCfg chain.BaseConfig, w wal
 		l.Fatalf("Not supported for chain:%s", s)
 		return nil
 	}
+	l.Debugf("newSender for %s is %+v", s, sender)
 
 	return sender
 }

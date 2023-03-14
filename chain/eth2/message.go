@@ -17,6 +17,8 @@
 package eth2
 
 import (
+	"fmt"
+
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
@@ -139,10 +141,24 @@ type TypePrefixedMessage struct {
 }
 
 func NewTypePrefixedMessage(rmi link.RelayMessageItem) (*TypePrefixedMessage, error) {
-	return &TypePrefixedMessage{
-		Type:    rmi.Type(),
-		Payload: rmi.(*relayMessageItem).Payload(),
-	}, nil
+	tpm := &TypePrefixedMessage{}
+	switch rmi.Type() {
+	case link.TypeBlockUpdate:
+		bu := rmi.(*BlockUpdate)
+		tpm.Type = bu.Type()
+		tpm.Payload = bu.Payload()
+	case link.TypeBlockProof:
+		bp := rmi.(*BlockProof)
+		tpm.Type = bp.Type()
+		tpm.Payload = bp.Payload()
+	case link.TypeMessageProof:
+		mp := rmi.(*MessageProof)
+		tpm.Type = mp.Type()
+		tpm.Payload = mp.Payload()
+	default:
+		return nil, fmt.Errorf("invalid message type")
+	}
+	return tpm, nil
 }
 
 type blockUpdateData struct {
@@ -172,9 +188,12 @@ func (b *blockUpdateData) RLPEncodeSelf(e codec.Encoder) error {
 	if err != nil {
 		return err
 	}
-	nsc, err := b.NextSyncCommittee.MarshalSSZ()
-	if err != nil {
-		return err
+	var nsc []byte
+	if b.NextSyncCommittee != nil {
+		nsc, err = b.NextSyncCommittee.MarshalSSZ()
+		if err != nil {
+			return err
+		}
 	}
 	if err = e2.EncodeMulti(
 		ah, fh, b.FinalizedHeaderBranch, sa, b.SignatureSlot, nsc, b.NextSyncCommitteeBranch,

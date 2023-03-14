@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"strconv"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -114,6 +113,7 @@ func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 }
 
 func (r *receiver) Start(bls *types.BMCLinkStatus) (<-chan link.ReceiveStatus, error) {
+	r.l.Debugf("Start eth2 receiver with BMCLinkStatus %+v", bls)
 	// TODO need initialization?
 
 	//TODO refactoring
@@ -133,7 +133,11 @@ func (r *receiver) GetStatus() (link.ReceiveStatus, error) {
 }
 
 func (r *receiver) GetHeightForSeq(seq int64) int64 {
-	return r.GetReceiveStatusForSequence(seq).Height()
+	rs := r.GetReceiveStatusForSequence(seq)
+	if rs == nil {
+		return 0
+	}
+	return rs.Height()
 }
 
 func (r *receiver) GetReceiveStatusForSequence(seq int64) *receiveStatus {
@@ -233,7 +237,8 @@ func (r *receiver) BuildRelayMessage(rmis []link.RelayMessageItem) ([]byte, erro
 		Messages: make([]*TypePrefixedMessage, 0),
 	}
 
-	for _, rmi := range rmis {
+	for i, rmi := range rmis {
+		r.l.Debugf("Build relay message(%d). type:%d, len:%d", i, rmi.Type(), rmi.Len())
 		tpm, err := NewTypePrefixedMessage(rmi)
 		if err != nil {
 			return nil, err
@@ -265,34 +270,46 @@ func (r *receiver) clearData(bls *types.BMCLinkStatus) {
 
 func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	if bls.Verifier.Height < 1 {
+		r.l.Errorf("cannot catchup from zero height")
 		return fmt.Errorf("cannot catchup from zero height")
 	}
 
 	eth2Topics := []string{client.TopicLCOptimisticUpdate, client.TopicLCFinalityUpdate}
-	for {
-		if err := r.cl.Events(eth2Topics, func(event *api.Event) {
-			if event.Topic == client.TopicLCOptimisticUpdate {
-				update := event.Data.(*altair.LightClientOptimisticUpdate)
-				mp, err := r.makeMessageProofData(
-					bls,
-					int64(update.AttestedHeader.Beacon.Slot),
-					update.AttestedHeader.Beacon,
-				)
+	r.l.Debugf("Start ethereum monitoring")
+	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
+		if event.Topic == client.TopicLCOptimisticUpdate {
+			update := event.Data.(*altair.LightClientOptimisticUpdate)
+			r.l.Debugf("Get light client optimistic update. slot:%d", update.AttestedHeader.Beacon.Slot)
+			mp, err := r.makeMessageProofData(
+				bls,
+				int64(update.AttestedHeader.Beacon.Slot),
+				update.AttestedHeader.Beacon,
+			)
+			if err != nil {
 				r.l.Debugf("failed to make messageProofData. %+v", err)
-				r.mps = append(r.mps, mp)
-			} else if event.Topic == client.TopicLCFinalityUpdate {
-				bu, err := r.handleFinalityUpdate(bls, event.Data.(*altair.LightClientFinalityUpdate))
-				if err != nil {
-					r.l.Debugf("failed to make blockUpdateData. %+v", err)
-				}
-				lrs := r.rss[len(r.rss)-1]
-				rs := newReceiveStatus(lrs.Seq(), bu)
-				r.rss = append(r.rss, rs)
-				r.rsc <- rs
+				return
 			}
-		}); err != nil {
-			r.l.Debugf("onError %+v", err)
+			if mp != nil {
+				r.mps = append(r.mps, mp)
+			}
+		} else if event.Topic == client.TopicLCFinalityUpdate {
+			bu, err := r.handleFinalityUpdate(bls, event.Data.(*altair.LightClientFinalityUpdate))
+			r.l.Debugf("Get light client finality update. slot:%d", bu.FinalizedHeader.Beacon.Slot)
+			if err != nil {
+				r.l.Debugf("failed to make blockUpdateData. %+v", err)
+				return
+			}
+			var lastSeq int64
+			if len(r.rss) > 0 {
+				lrs := r.rss[len(r.rss)-1]
+				lastSeq = lrs.Seq()
+			}
+			rs := newReceiveStatus(lastSeq, bu)
+			r.rss = append(r.rss, rs)
+			r.rsc <- rs
 		}
+	}); err != nil {
+		r.l.Debugf("onError %+v", err)
 	}
 	return nil
 }
@@ -336,12 +353,11 @@ func (r *receiver) makeMessageProofData(
 	slot int64,
 	header *phase0.BeaconBlockHeader,
 ) (mp *messageProofData, err error) {
-	beaconBlock, err := r.cl.BeaconBlock(strconv.FormatInt(slot, 10))
+	elBlockNum, err := r.cl.SlotToBlockNumber(phase0.Slot(slot))
 	if err != nil {
 		return
 	}
-	elBlockNum := big.NewInt(int64(beaconBlock.Bellatrix.Message.Body.ExecutionPayload.BlockNumber))
-	elBlock, err := r.el.BlockByNumber(elBlockNum)
+	elBlock, err := r.el.BlockByNumber(big.NewInt(int64(elBlockNum)))
 	if err != nil {
 		return
 	}
@@ -350,6 +366,7 @@ func (r *receiver) makeMessageProofData(
 	if err != nil {
 		return
 	}
+	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d", len(logs), slot, elBlockNum)
 	if len(logs) == 0 {
 		return
 	}
