@@ -1,5 +1,5 @@
 {
-	"name": "icon_local",
+	"name": "icon",
 	"contract": "java",
 	"endpoint": "http://localhost:9080/api/v3",
 	"nid": 3,
