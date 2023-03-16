@@ -118,7 +118,7 @@ func newReceiver(s string, cfg chain.Config, l log.Logger) link.Receiver {
 		l.Fatalf("Not supported for chain:%s", s)
 		return nil
 	}
-	l.Debugf("newReceiver for %s is %+v", s, receiver)
+	l.Debugf("newReceiver for %s to %s", s, cfg.Src.Endpoint)
 	return receiver
 }
 
@@ -127,16 +127,16 @@ func newSender(s string, srcCfg chain.BaseConfig, dstCfg chain.BaseConfig, w wal
 
 	switch s {
 	case ICON:
-		sender = icon.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, srcCfg.Options, l)
+		sender = icon.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, dstCfg.Options, l)
 	case ETH:
-		sender = eth2.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, srcCfg.Options, l)
+		sender = eth2.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, dstCfg.Options, l)
 	case HARDHAT:
 		sender = ethbr.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, nil, l)
 	default:
 		l.Fatalf("Not supported for chain:%s", s)
 		return nil
 	}
-	l.Debugf("newSender for %s is %+v", s, sender)
+	l.Debugf("newSender for %s to %s", s, dstCfg.Endpoint)
 
 	return sender
 }

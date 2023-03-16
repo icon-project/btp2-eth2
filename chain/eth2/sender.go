@@ -193,18 +193,16 @@ func (s *sender) getStatus(bn uint64) (*types.BMCLinkStatus, error) {
 }
 
 func (s *sender) handleFinalityUpdate() {
-	for {
-		if err := s.cl.Events([]string{client.TopicLCFinalityUpdate}, func(event *api.Event) {
-			update := event.Data.(*altair.LightClientFinalityUpdate)
-			s.l.Debugf("handle finality_update event slot:%d", update.FinalizedHeader.Beacon.Slot)
-			blockNumber, err := s.cl.SlotToBlockNumber(update.FinalizedHeader.Beacon.Slot)
-			if err != nil {
-				s.l.Panicf("can't convert slot to block number. %d", update.FinalizedHeader.Beacon.Slot)
-			}
-			s.checkRelayResult(blockNumber)
-		}); err != nil {
-			s.l.Panicf("onError %v", err)
+	if err := s.cl.Events([]string{client.TopicLCFinalityUpdate}, func(event *api.Event) {
+		update := event.Data.(*altair.LightClientFinalityUpdate)
+		s.l.Debugf("handle finality_update event slot:%d", update.FinalizedHeader.Beacon.Slot)
+		blockNumber, err := s.cl.SlotToBlockNumber(update.FinalizedHeader.Beacon.Slot)
+		if err != nil {
+			s.l.Panicf("can't convert slot to block number. %d", update.FinalizedHeader.Beacon.Slot)
 		}
+		s.checkRelayResult(blockNumber)
+	}); err != nil {
+		s.l.Panicf("onError %v", err)
 	}
 }
 
