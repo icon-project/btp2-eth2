@@ -61,7 +61,7 @@ type TypesLinkStatus struct {
 
 // BMCMetaData contains all meta data concerning the BMC contract.
 var BMCMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_src\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_next\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_event\",\"type\":\"string\"}],\"name\":\"BTPEvent\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"_sender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_receiver\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"}],\"name\":\"ClaimReward\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"_sender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_result\",\"type\":\"uint256\"}],\"name\":\"ClaimRewardResult\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"version\",\"type\":\"uint8\"}],\"name\":\"Initialized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_next\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_seq\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"Message\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_prev\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_seq\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_ecode\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_emsg\",\"type\":\"string\"}],\"name\":\"MessageDropped\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"_receiver\",\"type\":\"string\"}],\"name\":\"claimReward\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_link\",\"type\":\"string\"}],\"name\":\"clearSeq\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_prev\",\"type\":\"string\"},{\"internalType\":\"uint256\",\"name\":\"_seq\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"string\",\"name\":\"src\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"dst\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"svc\",\"type\":\"string\"},{\"internalType\":\"int256\",\"name\":\"sn\",\"type\":\"int256\"},{\"internalType\":\"bytes\",\"name\":\"message\",\"type\":\"bytes\"},{\"internalType\":\"int256\",\"name\":\"nsn\",\"type\":\"int256\"},{\"components\":[{\"internalType\":\"string\",\"name\":\"network\",\"type\":\"string\"},{\"internalType\":\"uint256[]\",\"name\":\"values\",\"type\":\"uint256[]\"}],\"internalType\":\"structTypes.FeeInfo\",\"name\":\"feeInfo\",\"type\":\"tuple\"}],\"internalType\":\"structTypes.BTPMessage\",\"name\":\"_msg\",\"type\":\"tuple\"}],\"name\":\"dropMessage\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_sender\",\"type\":\"address\"},{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"},{\"internalType\":\"uint256\",\"name\":\"_result\",\"type\":\"uint256\"}],\"name\":\"emitClaimRewardResult\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getBtpAddress\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_to\",\"type\":\"string\"},{\"internalType\":\"bool\",\"name\":\"_response\",\"type\":\"bool\"}],\"name\":\"getFee\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getNetworkAddress\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getNetworkSn\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"address\",\"name\":\"_addr\",\"type\":\"address\"}],\"name\":\"getReward\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_link\",\"type\":\"string\"}],\"name\":\"getStatus\",\"outputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"rxSeq\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"txSeq\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"height\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"extra\",\"type\":\"bytes\"}],\"internalType\":\"structIBMV.VerifierStatus\",\"name\":\"verifier\",\"type\":\"tuple\"},{\"internalType\":\"uint256\",\"name\":\"currentHeight\",\"type\":\"uint256\"}],\"internalType\":\"structTypes.LinkStatus\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_prev\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"handleRelayMessage\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"address\",\"name\":\"_bmcManagementAddr\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"_bmcServiceAddr\",\"type\":\"address\"}],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_next\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"sendInternal\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_to\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"_svc\",\"type\":\"string\"},{\"internalType\":\"int256\",\"name\":\"_sn\",\"type\":\"int256\"},{\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"sendMessage\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}]",
+	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"string\",\"name\":\"_src\",\"type\":\"string\"},{\"indexed\":true,\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_next\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_event\",\"type\":\"string\"}],\"name\":\"BTPEvent\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"_sender\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_receiver\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"}],\"name\":\"ClaimReward\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"_sender\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_result\",\"type\":\"uint256\"}],\"name\":\"ClaimRewardResult\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"version\",\"type\":\"uint8\"}],\"name\":\"Initialized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"string\",\"name\":\"_next\",\"type\":\"string\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"_seq\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"Message\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"string\",\"name\":\"_prev\",\"type\":\"string\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"_seq\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_ecode\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"_emsg\",\"type\":\"string\"}],\"name\":\"MessageDropped\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"_receiver\",\"type\":\"string\"}],\"name\":\"claimReward\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_link\",\"type\":\"string\"}],\"name\":\"clearSeq\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_prev\",\"type\":\"string\"},{\"internalType\":\"uint256\",\"name\":\"_seq\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"string\",\"name\":\"src\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"dst\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"svc\",\"type\":\"string\"},{\"internalType\":\"int256\",\"name\":\"sn\",\"type\":\"int256\"},{\"internalType\":\"bytes\",\"name\":\"message\",\"type\":\"bytes\"},{\"internalType\":\"int256\",\"name\":\"nsn\",\"type\":\"int256\"},{\"components\":[{\"internalType\":\"string\",\"name\":\"network\",\"type\":\"string\"},{\"internalType\":\"uint256[]\",\"name\":\"values\",\"type\":\"uint256[]\"}],\"internalType\":\"structTypes.FeeInfo\",\"name\":\"feeInfo\",\"type\":\"tuple\"}],\"internalType\":\"structTypes.BTPMessage\",\"name\":\"_msg\",\"type\":\"tuple\"}],\"name\":\"dropMessage\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_sender\",\"type\":\"address\"},{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"int256\",\"name\":\"_nsn\",\"type\":\"int256\"},{\"internalType\":\"uint256\",\"name\":\"_result\",\"type\":\"uint256\"}],\"name\":\"emitClaimRewardResult\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getBtpAddress\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_to\",\"type\":\"string\"},{\"internalType\":\"bool\",\"name\":\"_response\",\"type\":\"bool\"}],\"name\":\"getFee\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getNetworkAddress\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getNetworkSn\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"address\",\"name\":\"_addr\",\"type\":\"address\"}],\"name\":\"getReward\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_link\",\"type\":\"string\"}],\"name\":\"getStatus\",\"outputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"rxSeq\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"txSeq\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"height\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"extra\",\"type\":\"bytes\"}],\"internalType\":\"structIBMV.VerifierStatus\",\"name\":\"verifier\",\"type\":\"tuple\"},{\"internalType\":\"uint256\",\"name\":\"currentHeight\",\"type\":\"uint256\"}],\"internalType\":\"structTypes.LinkStatus\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_prev\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"handleRelayMessage\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_network\",\"type\":\"string\"},{\"internalType\":\"address\",\"name\":\"_bmcManagementAddr\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"_bmcServiceAddr\",\"type\":\"address\"}],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_next\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"sendInternal\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_to\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"_svc\",\"type\":\"string\"},{\"internalType\":\"int256\",\"name\":\"_sn\",\"type\":\"int256\"},{\"internalType\":\"bytes\",\"name\":\"_msg\",\"type\":\"bytes\"}],\"name\":\"sendMessage\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}]",
 }
 
 // BMCABI is the input ABI used to generate the binding from.
@@ -654,7 +654,7 @@ func (it *BMCBTPEventIterator) Close() error {
 
 // BMCBTPEvent represents a BTPEvent event raised by the BMC contract.
 type BMCBTPEvent struct {
-	Src   string
+	Src   common.Hash
 	Nsn   *big.Int
 	Next  string
 	Event string
@@ -663,10 +663,19 @@ type BMCBTPEvent struct {
 
 // FilterBTPEvent is a free log retrieval operation binding the contract event 0x51f135d1c44e53689ca91af3b1bce4918d2b590d92bb76a854ab30e7de741828.
 //
-// Solidity: event BTPEvent(string _src, int256 _nsn, string _next, string _event)
-func (_BMC *BMCFilterer) FilterBTPEvent(opts *bind.FilterOpts) (*BMCBTPEventIterator, error) {
+// Solidity: event BTPEvent(string indexed _src, int256 indexed _nsn, string _next, string _event)
+func (_BMC *BMCFilterer) FilterBTPEvent(opts *bind.FilterOpts, _src []string, _nsn []*big.Int) (*BMCBTPEventIterator, error) {
 
-	logs, sub, err := _BMC.contract.FilterLogs(opts, "BTPEvent")
+	var _srcRule []interface{}
+	for _, _srcItem := range _src {
+		_srcRule = append(_srcRule, _srcItem)
+	}
+	var _nsnRule []interface{}
+	for _, _nsnItem := range _nsn {
+		_nsnRule = append(_nsnRule, _nsnItem)
+	}
+
+	logs, sub, err := _BMC.contract.FilterLogs(opts, "BTPEvent", _srcRule, _nsnRule)
 	if err != nil {
 		return nil, err
 	}
@@ -675,10 +684,19 @@ func (_BMC *BMCFilterer) FilterBTPEvent(opts *bind.FilterOpts) (*BMCBTPEventIter
 
 // WatchBTPEvent is a free log subscription operation binding the contract event 0x51f135d1c44e53689ca91af3b1bce4918d2b590d92bb76a854ab30e7de741828.
 //
-// Solidity: event BTPEvent(string _src, int256 _nsn, string _next, string _event)
-func (_BMC *BMCFilterer) WatchBTPEvent(opts *bind.WatchOpts, sink chan<- *BMCBTPEvent) (event.Subscription, error) {
+// Solidity: event BTPEvent(string indexed _src, int256 indexed _nsn, string _next, string _event)
+func (_BMC *BMCFilterer) WatchBTPEvent(opts *bind.WatchOpts, sink chan<- *BMCBTPEvent, _src []string, _nsn []*big.Int) (event.Subscription, error) {
 
-	logs, sub, err := _BMC.contract.WatchLogs(opts, "BTPEvent")
+	var _srcRule []interface{}
+	for _, _srcItem := range _src {
+		_srcRule = append(_srcRule, _srcItem)
+	}
+	var _nsnRule []interface{}
+	for _, _nsnItem := range _nsn {
+		_nsnRule = append(_nsnRule, _nsnItem)
+	}
+
+	logs, sub, err := _BMC.contract.WatchLogs(opts, "BTPEvent", _srcRule, _nsnRule)
 	if err != nil {
 		return nil, err
 	}
@@ -712,7 +730,7 @@ func (_BMC *BMCFilterer) WatchBTPEvent(opts *bind.WatchOpts, sink chan<- *BMCBTP
 
 // ParseBTPEvent is a log parse operation binding the contract event 0x51f135d1c44e53689ca91af3b1bce4918d2b590d92bb76a854ab30e7de741828.
 //
-// Solidity: event BTPEvent(string _src, int256 _nsn, string _next, string _event)
+// Solidity: event BTPEvent(string indexed _src, int256 indexed _nsn, string _next, string _event)
 func (_BMC *BMCFilterer) ParseBTPEvent(log types.Log) (*BMCBTPEvent, error) {
 	event := new(BMCBTPEvent)
 	if err := _BMC.contract.UnpackLog(event, "BTPEvent", log); err != nil {
@@ -792,7 +810,7 @@ func (it *BMCClaimRewardIterator) Close() error {
 // BMCClaimReward represents a ClaimReward event raised by the BMC contract.
 type BMCClaimReward struct {
 	Sender   common.Address
-	Network  string
+	Network  common.Hash
 	Receiver string
 	Amount   *big.Int
 	Nsn      *big.Int
@@ -801,10 +819,19 @@ type BMCClaimReward struct {
 
 // FilterClaimReward is a free log retrieval operation binding the contract event 0x92a1bf3ab6e4839bb58db5f99ae98936355e94c1223779807563d1a08a3bf449.
 //
-// Solidity: event ClaimReward(address _sender, string _network, string _receiver, uint256 _amount, int256 _nsn)
-func (_BMC *BMCFilterer) FilterClaimReward(opts *bind.FilterOpts) (*BMCClaimRewardIterator, error) {
+// Solidity: event ClaimReward(address indexed _sender, string indexed _network, string _receiver, uint256 _amount, int256 _nsn)
+func (_BMC *BMCFilterer) FilterClaimReward(opts *bind.FilterOpts, _sender []common.Address, _network []string) (*BMCClaimRewardIterator, error) {
 
-	logs, sub, err := _BMC.contract.FilterLogs(opts, "ClaimReward")
+	var _senderRule []interface{}
+	for _, _senderItem := range _sender {
+		_senderRule = append(_senderRule, _senderItem)
+	}
+	var _networkRule []interface{}
+	for _, _networkItem := range _network {
+		_networkRule = append(_networkRule, _networkItem)
+	}
+
+	logs, sub, err := _BMC.contract.FilterLogs(opts, "ClaimReward", _senderRule, _networkRule)
 	if err != nil {
 		return nil, err
 	}
@@ -813,10 +840,19 @@ func (_BMC *BMCFilterer) FilterClaimReward(opts *bind.FilterOpts) (*BMCClaimRewa
 
 // WatchClaimReward is a free log subscription operation binding the contract event 0x92a1bf3ab6e4839bb58db5f99ae98936355e94c1223779807563d1a08a3bf449.
 //
-// Solidity: event ClaimReward(address _sender, string _network, string _receiver, uint256 _amount, int256 _nsn)
-func (_BMC *BMCFilterer) WatchClaimReward(opts *bind.WatchOpts, sink chan<- *BMCClaimReward) (event.Subscription, error) {
+// Solidity: event ClaimReward(address indexed _sender, string indexed _network, string _receiver, uint256 _amount, int256 _nsn)
+func (_BMC *BMCFilterer) WatchClaimReward(opts *bind.WatchOpts, sink chan<- *BMCClaimReward, _sender []common.Address, _network []string) (event.Subscription, error) {
 
-	logs, sub, err := _BMC.contract.WatchLogs(opts, "ClaimReward")
+	var _senderRule []interface{}
+	for _, _senderItem := range _sender {
+		_senderRule = append(_senderRule, _senderItem)
+	}
+	var _networkRule []interface{}
+	for _, _networkItem := range _network {
+		_networkRule = append(_networkRule, _networkItem)
+	}
+
+	logs, sub, err := _BMC.contract.WatchLogs(opts, "ClaimReward", _senderRule, _networkRule)
 	if err != nil {
 		return nil, err
 	}
@@ -850,7 +886,7 @@ func (_BMC *BMCFilterer) WatchClaimReward(opts *bind.WatchOpts, sink chan<- *BMC
 
 // ParseClaimReward is a log parse operation binding the contract event 0x92a1bf3ab6e4839bb58db5f99ae98936355e94c1223779807563d1a08a3bf449.
 //
-// Solidity: event ClaimReward(address _sender, string _network, string _receiver, uint256 _amount, int256 _nsn)
+// Solidity: event ClaimReward(address indexed _sender, string indexed _network, string _receiver, uint256 _amount, int256 _nsn)
 func (_BMC *BMCFilterer) ParseClaimReward(log types.Log) (*BMCClaimReward, error) {
 	event := new(BMCClaimReward)
 	if err := _BMC.contract.UnpackLog(event, "ClaimReward", log); err != nil {
@@ -930,7 +966,7 @@ func (it *BMCClaimRewardResultIterator) Close() error {
 // BMCClaimRewardResult represents a ClaimRewardResult event raised by the BMC contract.
 type BMCClaimRewardResult struct {
 	Sender  common.Address
-	Network string
+	Network common.Hash
 	Nsn     *big.Int
 	Result  *big.Int
 	Raw     types.Log // Blockchain specific contextual infos
@@ -938,10 +974,19 @@ type BMCClaimRewardResult struct {
 
 // FilterClaimRewardResult is a free log retrieval operation binding the contract event 0xe4a536fde1966a83411167748abc5fbd80e0247bffe941ca4ddb5079fd730636.
 //
-// Solidity: event ClaimRewardResult(address _sender, string _network, int256 _nsn, uint256 _result)
-func (_BMC *BMCFilterer) FilterClaimRewardResult(opts *bind.FilterOpts) (*BMCClaimRewardResultIterator, error) {
+// Solidity: event ClaimRewardResult(address indexed _sender, string indexed _network, int256 _nsn, uint256 _result)
+func (_BMC *BMCFilterer) FilterClaimRewardResult(opts *bind.FilterOpts, _sender []common.Address, _network []string) (*BMCClaimRewardResultIterator, error) {
 
-	logs, sub, err := _BMC.contract.FilterLogs(opts, "ClaimRewardResult")
+	var _senderRule []interface{}
+	for _, _senderItem := range _sender {
+		_senderRule = append(_senderRule, _senderItem)
+	}
+	var _networkRule []interface{}
+	for _, _networkItem := range _network {
+		_networkRule = append(_networkRule, _networkItem)
+	}
+
+	logs, sub, err := _BMC.contract.FilterLogs(opts, "ClaimRewardResult", _senderRule, _networkRule)
 	if err != nil {
 		return nil, err
 	}
@@ -950,10 +995,19 @@ func (_BMC *BMCFilterer) FilterClaimRewardResult(opts *bind.FilterOpts) (*BMCCla
 
 // WatchClaimRewardResult is a free log subscription operation binding the contract event 0xe4a536fde1966a83411167748abc5fbd80e0247bffe941ca4ddb5079fd730636.
 //
-// Solidity: event ClaimRewardResult(address _sender, string _network, int256 _nsn, uint256 _result)
-func (_BMC *BMCFilterer) WatchClaimRewardResult(opts *bind.WatchOpts, sink chan<- *BMCClaimRewardResult) (event.Subscription, error) {
+// Solidity: event ClaimRewardResult(address indexed _sender, string indexed _network, int256 _nsn, uint256 _result)
+func (_BMC *BMCFilterer) WatchClaimRewardResult(opts *bind.WatchOpts, sink chan<- *BMCClaimRewardResult, _sender []common.Address, _network []string) (event.Subscription, error) {
 
-	logs, sub, err := _BMC.contract.WatchLogs(opts, "ClaimRewardResult")
+	var _senderRule []interface{}
+	for _, _senderItem := range _sender {
+		_senderRule = append(_senderRule, _senderItem)
+	}
+	var _networkRule []interface{}
+	for _, _networkItem := range _network {
+		_networkRule = append(_networkRule, _networkItem)
+	}
+
+	logs, sub, err := _BMC.contract.WatchLogs(opts, "ClaimRewardResult", _senderRule, _networkRule)
 	if err != nil {
 		return nil, err
 	}
@@ -987,7 +1041,7 @@ func (_BMC *BMCFilterer) WatchClaimRewardResult(opts *bind.WatchOpts, sink chan<
 
 // ParseClaimRewardResult is a log parse operation binding the contract event 0xe4a536fde1966a83411167748abc5fbd80e0247bffe941ca4ddb5079fd730636.
 //
-// Solidity: event ClaimRewardResult(address _sender, string _network, int256 _nsn, uint256 _result)
+// Solidity: event ClaimRewardResult(address indexed _sender, string indexed _network, int256 _nsn, uint256 _result)
 func (_BMC *BMCFilterer) ParseClaimRewardResult(log types.Log) (*BMCClaimRewardResult, error) {
 	event := new(BMCClaimRewardResult)
 	if err := _BMC.contract.UnpackLog(event, "ClaimRewardResult", log); err != nil {
@@ -1200,7 +1254,7 @@ func (it *BMCMessageIterator) Close() error {
 
 // BMCMessage represents a Message event raised by the BMC contract.
 type BMCMessage struct {
-	Next string
+	Next common.Hash
 	Seq  *big.Int
 	Msg  []byte
 	Raw  types.Log // Blockchain specific contextual infos
@@ -1208,10 +1262,19 @@ type BMCMessage struct {
 
 // FilterMessage is a free log retrieval operation binding the contract event 0x37be353f216cf7e33639101fd610c542e6a0c0109173fa1c1d8b04d34edb7c1b.
 //
-// Solidity: event Message(string _next, uint256 _seq, bytes _msg)
-func (_BMC *BMCFilterer) FilterMessage(opts *bind.FilterOpts) (*BMCMessageIterator, error) {
+// Solidity: event Message(string indexed _next, uint256 indexed _seq, bytes _msg)
+func (_BMC *BMCFilterer) FilterMessage(opts *bind.FilterOpts, _next []string, _seq []*big.Int) (*BMCMessageIterator, error) {
 
-	logs, sub, err := _BMC.contract.FilterLogs(opts, "Message")
+	var _nextRule []interface{}
+	for _, _nextItem := range _next {
+		_nextRule = append(_nextRule, _nextItem)
+	}
+	var _seqRule []interface{}
+	for _, _seqItem := range _seq {
+		_seqRule = append(_seqRule, _seqItem)
+	}
+
+	logs, sub, err := _BMC.contract.FilterLogs(opts, "Message", _nextRule, _seqRule)
 	if err != nil {
 		return nil, err
 	}
@@ -1220,10 +1283,19 @@ func (_BMC *BMCFilterer) FilterMessage(opts *bind.FilterOpts) (*BMCMessageIterat
 
 // WatchMessage is a free log subscription operation binding the contract event 0x37be353f216cf7e33639101fd610c542e6a0c0109173fa1c1d8b04d34edb7c1b.
 //
-// Solidity: event Message(string _next, uint256 _seq, bytes _msg)
-func (_BMC *BMCFilterer) WatchMessage(opts *bind.WatchOpts, sink chan<- *BMCMessage) (event.Subscription, error) {
+// Solidity: event Message(string indexed _next, uint256 indexed _seq, bytes _msg)
+func (_BMC *BMCFilterer) WatchMessage(opts *bind.WatchOpts, sink chan<- *BMCMessage, _next []string, _seq []*big.Int) (event.Subscription, error) {
 
-	logs, sub, err := _BMC.contract.WatchLogs(opts, "Message")
+	var _nextRule []interface{}
+	for _, _nextItem := range _next {
+		_nextRule = append(_nextRule, _nextItem)
+	}
+	var _seqRule []interface{}
+	for _, _seqItem := range _seq {
+		_seqRule = append(_seqRule, _seqItem)
+	}
+
+	logs, sub, err := _BMC.contract.WatchLogs(opts, "Message", _nextRule, _seqRule)
 	if err != nil {
 		return nil, err
 	}
@@ -1257,7 +1329,7 @@ func (_BMC *BMCFilterer) WatchMessage(opts *bind.WatchOpts, sink chan<- *BMCMess
 
 // ParseMessage is a log parse operation binding the contract event 0x37be353f216cf7e33639101fd610c542e6a0c0109173fa1c1d8b04d34edb7c1b.
 //
-// Solidity: event Message(string _next, uint256 _seq, bytes _msg)
+// Solidity: event Message(string indexed _next, uint256 indexed _seq, bytes _msg)
 func (_BMC *BMCFilterer) ParseMessage(log types.Log) (*BMCMessage, error) {
 	event := new(BMCMessage)
 	if err := _BMC.contract.UnpackLog(event, "Message", log); err != nil {
@@ -1336,7 +1408,7 @@ func (it *BMCMessageDroppedIterator) Close() error {
 
 // BMCMessageDropped represents a MessageDropped event raised by the BMC contract.
 type BMCMessageDropped struct {
-	Prev  string
+	Prev  common.Hash
 	Seq   *big.Int
 	Msg   []byte
 	Ecode *big.Int
@@ -1346,10 +1418,19 @@ type BMCMessageDropped struct {
 
 // FilterMessageDropped is a free log retrieval operation binding the contract event 0x35348898083dc8da7eb4e604320d7cc250732cc1f584d2596f670b5d6bab8de5.
 //
-// Solidity: event MessageDropped(string _prev, uint256 _seq, bytes _msg, uint256 _ecode, string _emsg)
-func (_BMC *BMCFilterer) FilterMessageDropped(opts *bind.FilterOpts) (*BMCMessageDroppedIterator, error) {
+// Solidity: event MessageDropped(string indexed _prev, uint256 indexed _seq, bytes _msg, uint256 _ecode, string _emsg)
+func (_BMC *BMCFilterer) FilterMessageDropped(opts *bind.FilterOpts, _prev []string, _seq []*big.Int) (*BMCMessageDroppedIterator, error) {
 
-	logs, sub, err := _BMC.contract.FilterLogs(opts, "MessageDropped")
+	var _prevRule []interface{}
+	for _, _prevItem := range _prev {
+		_prevRule = append(_prevRule, _prevItem)
+	}
+	var _seqRule []interface{}
+	for _, _seqItem := range _seq {
+		_seqRule = append(_seqRule, _seqItem)
+	}
+
+	logs, sub, err := _BMC.contract.FilterLogs(opts, "MessageDropped", _prevRule, _seqRule)
 	if err != nil {
 		return nil, err
 	}
@@ -1358,10 +1439,19 @@ func (_BMC *BMCFilterer) FilterMessageDropped(opts *bind.FilterOpts) (*BMCMessag
 
 // WatchMessageDropped is a free log subscription operation binding the contract event 0x35348898083dc8da7eb4e604320d7cc250732cc1f584d2596f670b5d6bab8de5.
 //
-// Solidity: event MessageDropped(string _prev, uint256 _seq, bytes _msg, uint256 _ecode, string _emsg)
-func (_BMC *BMCFilterer) WatchMessageDropped(opts *bind.WatchOpts, sink chan<- *BMCMessageDropped) (event.Subscription, error) {
+// Solidity: event MessageDropped(string indexed _prev, uint256 indexed _seq, bytes _msg, uint256 _ecode, string _emsg)
+func (_BMC *BMCFilterer) WatchMessageDropped(opts *bind.WatchOpts, sink chan<- *BMCMessageDropped, _prev []string, _seq []*big.Int) (event.Subscription, error) {
 
-	logs, sub, err := _BMC.contract.WatchLogs(opts, "MessageDropped")
+	var _prevRule []interface{}
+	for _, _prevItem := range _prev {
+		_prevRule = append(_prevRule, _prevItem)
+	}
+	var _seqRule []interface{}
+	for _, _seqItem := range _seq {
+		_seqRule = append(_seqRule, _seqItem)
+	}
+
+	logs, sub, err := _BMC.contract.WatchLogs(opts, "MessageDropped", _prevRule, _seqRule)
 	if err != nil {
 		return nil, err
 	}
@@ -1395,7 +1485,7 @@ func (_BMC *BMCFilterer) WatchMessageDropped(opts *bind.WatchOpts, sink chan<- *
 
 // ParseMessageDropped is a log parse operation binding the contract event 0x35348898083dc8da7eb4e604320d7cc250732cc1f584d2596f670b5d6bab8de5.
 //
-// Solidity: event MessageDropped(string _prev, uint256 _seq, bytes _msg, uint256 _ecode, string _emsg)
+// Solidity: event MessageDropped(string indexed _prev, uint256 indexed _seq, bytes _msg, uint256 _ecode, string _emsg)
 func (_BMC *BMCFilterer) ParseMessageDropped(log types.Log) (*BMCMessageDropped, error) {
 	event := new(BMCMessageDropped)
 	if err := _BMC.contract.UnpackLog(event, "MessageDropped", log); err != nil {
