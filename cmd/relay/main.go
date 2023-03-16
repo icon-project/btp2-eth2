@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -33,8 +32,6 @@ import (
 	"github.com/icon-project/btp2/common/log"
 	"github.com/icon-project/btp2/common/wallet"
 	"github.com/spf13/cobra"
-
-	"github.com/icon-project/btp2-eth2/chain/eth2/client"
 )
 
 var (
@@ -117,12 +114,12 @@ func (c *Config) EnsureWallet() error {
 }
 
 var logoLines = []string{
-	"____ _______ _____             ______ _   _                                     ___    ___",
-	"|  _ \\__   __|  __ \\           |  ____| | | |                                   |__ \\  / _ \\",
-	"| |_) | | |  | |__) |  ______  | |__  | |_| |__   ___ _ __ ___ _   _ _ __ ___      ) || | | |",
-	"|  _ <  | |  |  ___/  |______| |  __| | __| '_ \\ / _ \\ '__/ _ \\ | | | '_ ` _ \\    / / | | | |",
-	"| |_) | | |  | |               | |____| |_| | | |  __/ | |  __/ |_| | | | | | |  / /_ | |_| |",
-	"|____/  |_|  |_|               |______|\\__|_| |_|\\___|_|  \\___|\\__,_|_| |_| |_| |____(_)___/",
+	"  ____ _____ ____    ____      _",
+	" | __ )_   _|  _ \\  |  _ \\ ___| | __ _ _   _",
+	" |  _ \\ | | | |_) | | |_) / _ \\ |/ _` | | | |",
+	" | |_) || | |  __/  |  _ <  __/ | (_| | |_| |",
+	" |____/ |_| |_|     |_| \\_\\___|_|\\__,_|\\__, |",
+	"                                       |___/ ",
 }
 
 func main() {
@@ -308,38 +305,6 @@ func main() {
 	genMdCmd := cli.NewGenerateMarkdownCommand(rootCmd, rootVc)
 	genMdCmd.Hidden = true
 
-	bmvInitCmd := &cobra.Command{
-		Use:   "bmvinit",
-		Short: "Generate initial data of Java BMV for Ethereum 2.0",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			outFilePath, err := cmd.Flags().GetString("output")
-			if err != nil {
-				return err
-			}
-			url, err := cmd.Flags().GetString("url")
-			if err != nil {
-				return err
-			}
-			initData, err := getBMVInitialData(url)
-			if err != nil {
-				return err
-			}
-
-			cmd.Println("Save data to", outFilePath)
-			if err = cli.JsonPrettySaveFile(outFilePath, 0644, initData); err != nil {
-				return err
-			}
-
-			return nil
-		},
-	}
-	rootCmd.AddCommand(bmvInitCmd)
-	bmvInitCmd.Flags().String("url", "http://20.20.5.191:9596", "URL of Beacon node API")
-	bmvInitCmd.Flags().String("output", "./bmv_init_data.json", "Output file name")
-
 	rootCmd.SilenceUsage = true
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Printf("%+v", err)
@@ -399,52 +364,4 @@ func setLogger(cfg *Config, w wallet.Wallet, modLevels map[string]string) log.Lo
 	}
 
 	return l
-}
-
-type bmvInitData struct {
-	GenesIsValidatorsRoot string
-	SyncCommittee         string
-	FinalizedHeader       string
-}
-
-func getBMVInitialData(url string) (*bmvInitData, error) {
-	l := log.WithFields(log.Fields{})
-	client, err := client.NewConsensusLayer(url, l)
-	if err != nil {
-		return nil, err
-	}
-
-	genesis, err := client.Genesis()
-	if err != nil {
-		return nil, err
-	}
-
-	root, err := client.BeaconBlockRoot("finalized")
-	if err != nil {
-		return nil, err
-	}
-	bootStrap, err := client.LightClientBootstrap(*root)
-	if err != nil {
-		return nil, err
-	}
-
-	var syncCommittee []byte
-	syncCommittee, err = bootStrap.CurrentSyncCommittee.MarshalSSZTo(syncCommittee)
-	if err != nil {
-		return nil, err
-	}
-
-	var finalizedHeader []byte
-	finalizedHeader, err = bootStrap.Header.Beacon.MarshalSSZTo(finalizedHeader)
-	if err != nil {
-		return nil, err
-	}
-
-	data := &bmvInitData{
-		GenesIsValidatorsRoot: genesis.GenesisValidatorsRoot.String(),
-		SyncCommittee:         "0x" + hex.EncodeToString(syncCommittee),
-		FinalizedHeader:       "0x" + hex.EncodeToString(finalizedHeader),
-	}
-	fmt.Printf("Get initial data at Slot(%d) from %s\n", bootStrap.Header.Beacon.Slot, url)
-	return data, nil
 }
