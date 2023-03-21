@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/icon-project/btp2/common/cli"
 	"github.com/icon-project/btp2/common/log"
 	"github.com/spf13/cobra"
@@ -118,7 +117,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			fh := &phase0.BeaconBlockHeader{}
+			fh := &altair.LightClientHeader{}
 			err = fh.UnmarshalSSZ(fhData)
 			if err != nil {
 				return err
