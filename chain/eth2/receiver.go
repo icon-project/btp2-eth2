@@ -283,7 +283,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			mp, err := r.makeMessageProofData(
 				bls,
 				int64(update.AttestedHeader.Beacon.Slot),
-				update.AttestedHeader.Beacon,
+				update.AttestedHeader,
 			)
 			if err != nil {
 				r.l.Debugf("failed to make messageProofData. %+v", err)
@@ -351,7 +351,7 @@ var eventSignatureTopic = crypto.Keccak256([]byte(eventSignature))
 func (r *receiver) makeMessageProofData(
 	bls *types.BMCLinkStatus,
 	slot int64,
-	header *phase0.BeaconBlockHeader,
+	header *altair.LightClientHeader,
 ) (mp *messageProofData, err error) {
 	elBlockNum, err := r.cl.SlotToBlockNumber(phase0.Slot(slot))
 	if err != nil {

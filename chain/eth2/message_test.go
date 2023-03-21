@@ -97,7 +97,7 @@ func TestMessage_BlockUpdateData(t *testing.T) {
 
 func TestMessage_BlockProofData(t *testing.T) {
 	bp := &blockProofData{
-		Header: lightClientHeader.Beacon,
+		Header: lightClientHeader,
 		Proof:  sszProof,
 	}
 

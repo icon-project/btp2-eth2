@@ -238,7 +238,7 @@ func (b *blockUpdateData) RLPDecodeSelf(d codec.Decoder) error {
 }
 
 type blockProofData struct {
-	Header *phase0.BeaconBlockHeader
+	Header *altair.LightClientHeader
 	Proof  *ssz.Proof // proof for BeaconState.BlockRoots or BeaconState.HistoricalRoots
 }
 
@@ -266,7 +266,7 @@ func (b *blockProofData) RLPDecodeSelf(d codec.Decoder) error {
 	if _, err = d2.DecodeMulti(&bs, &b.Proof); err != nil {
 		return err
 	}
-	b.Header = new(phase0.BeaconBlockHeader)
+	b.Header = &altair.LightClientHeader{}
 	err = b.Header.UnmarshalSSZ(bs)
 	if err != nil {
 		return err
@@ -279,13 +279,13 @@ type messageProofData struct {
 	ReceiptsRootProof *ssz.Proof
 	ReceiptProofs     []*receiptProof
 
-	Header   *phase0.BeaconBlockHeader
+	Header   *altair.LightClientHeader
 	StartSeq int64
 	EndSeq   int64
 }
 
 func (m *messageProofData) Height() int64 {
-	return int64(m.Header.Slot)
+	return int64(m.Header.Beacon.Slot)
 }
 
 func (m *messageProofData) Seq() int64 {
