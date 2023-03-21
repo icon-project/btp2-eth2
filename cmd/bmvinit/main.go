@@ -18,10 +18,13 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/icon-project/btp2/common/cli"
 	"github.com/icon-project/btp2/common/log"
 	"github.com/spf13/cobra"
@@ -30,7 +33,7 @@ import (
 )
 
 var (
-	version = "0.1.0"
+	version = "unknown"
 	build   = "unknown"
 )
 
@@ -84,6 +87,53 @@ func main() {
 	genCMD.Flags().String("url", "http://20.20.5.191:9596", "URL of Beacon node API")
 	genCMD.Flags().String("output", "./bmv_init_data.json", "Output file name")
 
+	decCMD := &cobra.Command{
+		Use:   "dec [file]",
+		Short: "Decode file",
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			bs, err := os.ReadFile(args[0])
+			if err != nil {
+				return err
+			}
+			data := &bmvInitData{}
+			err = json.Unmarshal(bs, data)
+			if err != nil {
+				return err
+			}
+
+			scData, err := hex.DecodeString(data.SyncCommittee[2:])
+			if err != nil {
+				return err
+			}
+			sc := &altair.SyncCommittee{}
+			err = sc.UnmarshalSSZ(scData)
+			if err != nil {
+				return err
+			}
+
+			fhData, err := hex.DecodeString(data.FinalizedHeader[2:])
+			if err != nil {
+				return err
+			}
+			fh := &phase0.BeaconBlockHeader{}
+			err = fh.UnmarshalSSZ(fhData)
+			if err != nil {
+				return err
+			}
+
+			cmd.Println("{")
+			cmd.Printf("sync_committee.aggregated_pubkey: %s\n", sc.AggregatePubkey.String())
+			cmd.Printf("finalized_header: %s\n", fh.String())
+			cmd.Println("}")
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(decCMD)
+
 	rootCmd.SilenceUsage = true
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Printf("%+v", err)
@@ -93,21 +143,21 @@ func main() {
 
 func getBMVInitialData(url string) (*bmvInitData, error) {
 	l := log.WithFields(log.Fields{})
-	client, err := client.NewConsensusLayer(url, l)
+	c, err := client.NewConsensusLayer(url, l)
 	if err != nil {
 		return nil, err
 	}
 
-	genesis, err := client.Genesis()
+	genesis, err := c.Genesis()
 	if err != nil {
 		return nil, err
 	}
 
-	root, err := client.BeaconBlockRoot("finalized")
+	root, err := c.BeaconBlockRoot("finalized")
 	if err != nil {
 		return nil, err
 	}
-	bootStrap, err := client.LightClientBootstrap(*root)
+	bootStrap, err := c.LightClientBootstrap(*root)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +169,7 @@ func getBMVInitialData(url string) (*bmvInitData, error) {
 	}
 
 	var finalizedHeader []byte
-	finalizedHeader, err = bootStrap.Header.Beacon.MarshalSSZTo(finalizedHeader)
+	finalizedHeader, err = bootStrap.Header.MarshalSSZTo(finalizedHeader)
 	if err != nil {
 		return nil, err
 	}
