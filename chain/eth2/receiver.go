@@ -79,6 +79,7 @@ type receiver struct {
 	dst types.BtpAddress
 	cl  *client.ConsensusLayer
 	el  *client.ExecutionLayer
+	bmc *client.BMC
 	nid int64
 	rsc chan link.ReceiveStatus
 	rss []*receiveStatus // with finalized header
@@ -108,6 +109,10 @@ func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 	r.cl, err = client.NewConsensusLayer(opt["consensus_endpoint"].(string), l)
 	if err != nil {
 		l.Panicf("failed to connect to %s, %v", opt["consensus_endpoint"].(string), err)
+	}
+	r.bmc, err = client.NewBMC(common.HexToAddress(r.src.ContractAddress()), r.el.GetBackend())
+	if err != nil {
+		l.Panicf("fail to get instance of BMC %s, %v", r.src.ContractAddress(), err)
 	}
 	return r
 }
@@ -270,8 +275,9 @@ func (r *receiver) clearData(bls *types.BMCLinkStatus) {
 
 func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	if bls.Verifier.Height < 1 {
-		r.l.Errorf("cannot catchup from zero height")
-		return fmt.Errorf("cannot catchup from zero height")
+		err := fmt.Errorf("cannot catchup from zero height")
+		r.l.Debug(err)
+		return err
 	}
 
 	eth2Topics := []string{client.TopicLCOptimisticUpdate, client.TopicLCFinalityUpdate}
@@ -291,6 +297,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			}
 			if mp != nil {
 				r.mps = append(r.mps, mp)
+				r.l.Debugf("add new mp:%+v", mp)
 			}
 		} else if event.Topic == client.TopicLCFinalityUpdate {
 			bu, err := r.handleFinalityUpdate(bls, event.Data.(*altair.LightClientFinalityUpdate))
@@ -320,10 +327,16 @@ func (r *receiver) handleFinalityUpdate(
 ) (*blockUpdateData, error) {
 	var nsc *altair.SyncCommittee
 	var nscBranch [][]byte
-
 	slot := update.FinalizedHeader.Beacon.Slot
+
+	r.l.Debugf("SyncCommittee Period: %d -> %d",
+		SyncCommitteePeriodAtSlot(phase0.Slot(bls.Verifier.Height)),
+		SyncCommitteePeriodAtSlot(slot),
+	)
+
 	if IsSyncCommitteeEdge(slot) {
-		lcUpdate, err := r.cl.LightClientUpdates(SyncCommitteePeriodAtSlot(update.FinalizedHeader.Beacon.Slot), 1)
+		r.l.Debugf("Make NextSyncCommittee")
+		lcUpdate, err := r.cl.LightClientUpdates(SyncCommitteePeriodAtSlot(slot), 1)
 		if err != nil {
 			return nil, err
 		}
@@ -392,8 +405,8 @@ func (r *receiver) makeMessageProofData(
 		return
 	}
 
-	bms, _ := client.UnpackEventLog(logs[0].Data)
-	bme, _ := client.UnpackEventLog(logs[len(logs)-1].Data)
+	bms, _ := r.bmc.ParseMessage(logs[0])
+	bme, _ := r.bmc.ParseMessage(logs[len(logs)-1])
 
 	mp = &messageProofData{
 		Slot:              slot,
@@ -421,16 +434,16 @@ func (r *receiver) getEventLogs(block *etypes.Block, startSeq int64) ([]etypes.L
 	}
 
 	seq := startSeq
-	for _, l := range logs {
-		bm, err := client.UnpackEventLog(l.Data)
+	for i, l := range logs {
+		message, err := r.bmc.ParseMessage(l)
 		if err != nil {
 			return nil, err
 		}
-		if seq != bm.Seq.Int64() {
-			r.l.Warnf("sequence number of BTP message is not continuous (e:%d r:%d)", seq, bm.Seq.Int64())
-			continue
+		if seq != message.Seq.Int64() {
+			r.l.Warnf("sequence number of BTP message is not continuous (e:%d r:%d)", seq, message.Seq.Int64())
+			// TODO remove from logs?
 		}
-		r.l.Debugf("BTPMessage[seq:%d next:%s] seq:%d dst:%s", bm.Seq, bm.Next, startSeq, r.dst.String())
+		r.l.Debugf("BTPMessage#%d[seq:%d] dst:%s", i, message.Seq, r.dst.String())
 		seq += 1
 	}
 	return logs, nil
@@ -473,7 +486,6 @@ func treeOffsetProofToSSZProof(data []byte) (*ssz.Proof, error) {
 	leaves := make([][]byte, leafCount, leafCount)
 	for i := 0; i < leafCount; i++ {
 		leaves[i] = data[dataOffset : dataOffset+32]
-		fmt.Printf("%d: %#x\n", i, leaves[i])
 		dataOffset += 32
 	}
 
