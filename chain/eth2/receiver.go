@@ -168,6 +168,7 @@ func (r *receiver) GetMarginForLimit() int64 {
 }
 
 func (r *receiver) BuildBlockUpdate(bls *types.BMCLinkStatus, limit int64) ([]link.BlockUpdate, error) {
+	// TODO call r.clearData() at r.FinalizedStatus() ?
 	r.clearData(bls)
 	bus := make([]link.BlockUpdate, 0)
 	for _, rs := range r.rss {
@@ -257,6 +258,11 @@ func (r *receiver) BuildRelayMessage(rmis []link.RelayMessageItem) ([]byte, erro
 	}
 
 	return rb, nil
+}
+
+func (r *receiver) FinalizedStatus(bls <-chan *types.BMCLinkStatus) {
+	in := <-bls
+	r.clearData(in)
 }
 
 func (r *receiver) clearData(bls *types.BMCLinkStatus) {

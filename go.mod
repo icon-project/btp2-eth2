@@ -12,7 +12,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/ethereum/go-ethereum v1.11.3
 	github.com/ferranbt/fastssz v0.1.3
-	github.com/icon-project/btp2 v0.0.0-20230308003505-49ecd73e8040
+	github.com/icon-project/btp2 v0.0.0-20230322084016-88472b863260
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.1

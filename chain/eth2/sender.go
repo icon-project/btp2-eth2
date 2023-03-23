@@ -65,7 +65,7 @@ type sender struct {
 	dst  types.BtpAddress
 	w    wallet.Wallet
 	l    log.Logger
-	sc   chan types.SenderMessage // send finalized data only
+	sc   chan types.RelayResult
 	reqs []*request
 	mtx  sync.RWMutex
 
@@ -81,7 +81,7 @@ func NewSender(src, dst types.BtpAddress, w wallet.Wallet, endpoint string, opt 
 		dst: dst,
 		w:   w,
 		l:   l,
-		sc:  make(chan types.SenderMessage),
+		sc:  make(chan types.RelayResult),
 	}
 	s.el, err = client.NewExecutionLayer(endpoint, l)
 	if err != nil {
@@ -98,12 +98,7 @@ func NewSender(src, dst types.BtpAddress, w wallet.Wallet, endpoint string, opt 
 	return s
 }
 
-func (s *sender) Start() (<-chan types.SenderMessage, error) {
-	go func() {
-		blockNumber, _ := s.cl.SlotToBlockNumber(0)
-		s.sendStatus(blockNumber)
-	}()
-
+func (s *sender) Start() (<-chan types.RelayResult, error) {
 	go s.handleFinalityUpdate()
 
 	return s.sc, nil
@@ -157,16 +152,6 @@ func (s *sender) clearRequest(index int) {
 		s.l.Debugf("clear requests to %d", index)
 		s.reqs = s.reqs[index-1:]
 	}
-}
-
-func (s *sender) sendStatus(blockNumber uint64) error {
-	s.l.Debugf("sendStatus of %d", blockNumber)
-	status, err := s.getStatus(blockNumber)
-	if err != nil {
-		return err
-	}
-	s.sc <- status
-	return nil
 }
 
 func (s *sender) getStatus(bn uint64) (*types.BMCLinkStatus, error) {
@@ -228,28 +213,28 @@ func (s *sender) checkRelayResult(to uint64) {
 			break
 		}
 		err = s.receiptToRevertError(receipt)
+		// TODO define errors.Code value for success
+		errCode := errors.Code(-1)
 		if err != nil {
 			s.l.Debugf("result fail %v. %v", req, err)
 			if ec, ok := errors.CoderOf(err); ok {
-				s.sc <- &types.RelayResult{
-					Id:  req.ID(),
-					Err: ec.ErrorCode(),
-				}
+				errCode = ec.ErrorCode()
 			} else {
-				s.l.Panicf("can't convert receipt to revertLog. %v", err)
+				errCode = client.BMVUnknown
 			}
-			index = -1
-			break
 		} else {
 			s.l.Debugf("result success %v", req)
+		}
+		s.sc <- types.RelayResult{
+			Id:        req.ID(),
+			Err:       errCode,
+			Finalized: true,
 		}
 	}
 	s.mtx.RUnlock()
 
+	// TODO how to clear request
 	s.clearRequest(index)
-	if index != -1 {
-		s.sendStatus(to)
-	}
 }
 
 func (s *sender) receiptToRevertError(receipt *etypes.Receipt) error {
@@ -266,7 +251,7 @@ func (s *sender) receiptToRevertError(receipt *etypes.Receipt) error {
 			}
 			return client.NewRevertError(code)
 		} else {
-			return client.NewRevertError(25)
+			return client.NewRevertError(int(client.BMVUnknown))
 		}
 	}
 	return nil

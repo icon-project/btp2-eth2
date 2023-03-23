@@ -530,6 +530,8 @@ github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/icon-project/btp2 v0.0.0-20230308003505-49ecd73e8040 h1:/jMmGZP18uOtsdCz9qt4DMVlcWA+kzq2f7dyBbqB7Ow=
 github.com/icon-project/btp2 v0.0.0-20230308003505-49ecd73e8040/go.mod h1:g63YurAwYcsww8fH4KiHfzcZoPDwom5xdZirmh4HZo8=
+github.com/icon-project/btp2 v0.0.0-20230322084016-88472b863260 h1:EsSABeOEzYmynNKQszL54EYPyKotzwmX6DR7/9B2x1w=
+github.com/icon-project/btp2 v0.0.0-20230322084016-88472b863260/go.mod h1:g63YurAwYcsww8fH4KiHfzcZoPDwom5xdZirmh4HZo8=
 github.com/imkira/go-interpol v1.1.0/go.mod h1:z0h2/2T3XF8kyEPpRgJ3kmNv+C43p+I/CoI+jC3w2iA=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/inconshreveable/mousetrap v1.0.1 h1:U3uMjPSQEBMNp1lFxmllqCPM6P5u/Xq7Pgzkat/bFNc=
