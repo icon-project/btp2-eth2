@@ -65,7 +65,7 @@ type sender struct {
 	dst  types.BtpAddress
 	w    wallet.Wallet
 	l    log.Logger
-	sc   chan types.RelayResult
+	sc   chan *types.RelayResult
 	reqs []*request
 	mtx  sync.RWMutex
 
@@ -81,7 +81,7 @@ func NewSender(src, dst types.BtpAddress, w wallet.Wallet, endpoint string, opt 
 		dst: dst,
 		w:   w,
 		l:   l,
-		sc:  make(chan types.RelayResult),
+		sc:  make(chan *types.RelayResult),
 	}
 	s.el, err = client.NewExecutionLayer(endpoint, l)
 	if err != nil {
@@ -98,7 +98,7 @@ func NewSender(src, dst types.BtpAddress, w wallet.Wallet, endpoint string, opt 
 	return s
 }
 
-func (s *sender) Start() (<-chan types.RelayResult, error) {
+func (s *sender) Start() (<-chan *types.RelayResult, error) {
 	go s.handleFinalityUpdate()
 
 	return s.sc, nil
@@ -225,7 +225,7 @@ func (s *sender) checkRelayResult(to uint64) {
 		} else {
 			s.l.Debugf("result success %v", req)
 		}
-		s.sc <- types.RelayResult{
+		s.sc <- &types.RelayResult{
 			Id:        req.ID(),
 			Err:       errCode,
 			Finalized: true,

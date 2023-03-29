@@ -121,7 +121,7 @@ func (m *MessageProof) LastSeqNum() int64 {
 	return m.lastSeq
 }
 
-func NewMessageProof(bls *types.BMCLinkStatus, ls int64, v interface{}) *MessageProof {
+func NewMessageProof(bls *types.BMCLinkStatus, ls int64, data *messageProofData) *MessageProof {
 	nextBls := &types.BMCLinkStatus{}
 	nextBls.RxSeq = ls
 	return &MessageProof{
@@ -130,7 +130,7 @@ func NewMessageProof(bls *types.BMCLinkStatus, ls int64, v interface{}) *Message
 		relayMessageItem: relayMessageItem{
 			it:      link.TypeMessageProof,
 			nextBls: nextBls,
-			payload: codec.RLP.MustMarshalToBytes(v),
+			payload: codec.RLP.MustMarshalToBytes(data),
 		},
 	}
 }
@@ -285,11 +285,15 @@ type messageProofData struct {
 }
 
 func (m *messageProofData) Height() int64 {
-	return int64(m.Header.Beacon.Slot)
+	return m.Slot
 }
 
-func (m *messageProofData) Seq() int64 {
-	return m.EndSeq
+func (m *messageProofData) Contains(seq int64) bool {
+	return m.StartSeq <= seq && seq <= m.EndSeq
+}
+
+func (m *messageProofData) MessageCount() int64 {
+	return m.EndSeq - m.StartSeq + 1
 }
 
 func (m *messageProofData) RLPEncodeSelf(e codec.Encoder) error {

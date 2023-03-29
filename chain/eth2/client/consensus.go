@@ -13,6 +13,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/icon-project/btp2/common/errors"
 	"github.com/icon-project/btp2/common/log"
 	"github.com/rs/zerolog"
 )
@@ -102,6 +103,9 @@ func (c *ConsensusLayer) SlotToBlockNumber(slot phase0.Slot) (uint64, error) {
 	}
 
 	block, err := c.BeaconBlock(strconv.FormatInt(int64(sn), 10))
+	if block == nil {
+		return 0, errors.NotFoundError.Errorf("there is no block at slot %d", slot)
+	}
 	if err != nil {
 		return 0, err
 	}

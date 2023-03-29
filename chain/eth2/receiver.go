@@ -17,10 +17,12 @@
 package eth2
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -35,9 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/icon-project/btp2/common/codec"
+	"github.com/icon-project/btp2/common/errors"
 	"github.com/icon-project/btp2/common/link"
 	"github.com/icon-project/btp2/common/log"
-	"github.com/icon-project/btp2/common/mbt"
 	"github.com/icon-project/btp2/common/types"
 
 	"github.com/icon-project/btp2-eth2/chain/eth2/client"
@@ -48,43 +50,33 @@ const (
 )
 
 type receiveStatus struct {
-	seq int64 // last sequence number of block
-	bu  *blockUpdateData
-
-	mt *mbt.MerkleBinaryTree
+	seq    int64 // last sequence number at height
+	height int64
+	bu     *blockUpdateData
 }
 
 func (r *receiveStatus) Height() int64 {
-	return int64(r.bu.FinalizedHeader.Beacon.Slot)
+	return r.height
 }
 
 func (r *receiveStatus) Seq() int64 {
 	return r.seq
 }
 
-func (r *receiveStatus) MerkleBinaryTree() *mbt.MerkleBinaryTree {
-	return r.mt
-}
-
-func newReceiveStatus(seq int64, bu *blockUpdateData) *receiveStatus {
-	return &receiveStatus{
-		seq: seq,
-		bu:  bu,
-	}
-}
-
 type receiver struct {
-	l   log.Logger
-	src types.BtpAddress
-	dst types.BtpAddress
-	cl  *client.ConsensusLayer
-	el  *client.ExecutionLayer
-	bmc *client.BMC
-	nid int64
-	rsc chan link.ReceiveStatus
-	rss []*receiveStatus // with finalized header
-	mps []*messageProofData
-	fq  *ethereum.FilterQuery
+	l      log.Logger
+	src    types.BtpAddress
+	dst    types.BtpAddress
+	cl     *client.ConsensusLayer
+	el     *client.ExecutionLayer
+	bmc    *client.BMC
+	nid    int64
+	rsc    chan link.ReceiveStatus
+	seq    int64
+	prevRS *receiveStatus
+	rss    []*receiveStatus
+	mps    []*messageProofData
+	fq     *ethereum.FilterQuery
 }
 
 func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]interface{}, l log.Logger) link.Receiver {
@@ -119,9 +111,7 @@ func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 
 func (r *receiver) Start(bls *types.BMCLinkStatus) (<-chan link.ReceiveStatus, error) {
 	r.l.Debugf("Start eth2 receiver with BMCLinkStatus %+v", bls)
-	// TODO need initialization?
 
-	//TODO refactoring
 	go func() {
 		r.Monitoring(bls)
 	}()
@@ -138,17 +128,17 @@ func (r *receiver) GetStatus() (link.ReceiveStatus, error) {
 }
 
 func (r *receiver) GetHeightForSeq(seq int64) int64 {
-	rs := r.GetReceiveStatusForSequence(seq)
-	if rs == nil {
+	mp := r.GetMessageProofDataForSeq(seq)
+	if mp == nil {
 		return 0
 	}
-	return rs.Height()
+	return mp.Height()
 }
 
-func (r *receiver) GetReceiveStatusForSequence(seq int64) *receiveStatus {
-	for _, rs := range r.rss {
-		if seq < rs.Seq() {
-			return rs
+func (r *receiver) GetMessageProofDataForSeq(seq int64) *messageProofData {
+	for _, mp := range r.mps {
+		if mp.Contains(seq) {
+			return mp
 		}
 	}
 	return nil
@@ -161,6 +151,19 @@ func (r *receiver) GetMessageProofDataForHeight(height int64) *messageProofData 
 		}
 	}
 	return nil
+}
+
+func (r *receiver) GetLastMessageProofDataForHeight(height int64) *messageProofData {
+	var lmp *messageProofData
+	for _, mp := range r.mps {
+		if mp.Slot <= height {
+			lmp = mp
+		}
+		if mp.Slot >= height {
+			break
+		}
+	}
+	return lmp
 }
 
 func (r *receiver) GetMarginForLimit() int64 {
@@ -179,6 +182,7 @@ func (r *receiver) BuildBlockUpdate(bls *types.BMCLinkStatus, limit int64) ([]li
 }
 
 func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link.BlockProof, error) {
+	r.l.Debugf("Build BlockProof for H:%d", height)
 	mp := r.GetMessageProofDataForHeight(height)
 	if mp == nil {
 		return nil, fmt.Errorf("invalid height %d", height)
@@ -190,7 +194,7 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 	if err != nil {
 		return nil, err
 	}
-	bp, err := treeOffsetProofToSSZProof(proof)
+	bp, err := TreeOffsetProofToSSZProof(proof)
 	if err != nil {
 		return nil, err
 	}
@@ -208,33 +212,14 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 }
 
 func (r *receiver) BuildMessageProof(bls *types.BMCLinkStatus, limit int64) (link.MessageProof, error) {
-	var offset int
-	rs := r.GetReceiveStatusForSequence(bls.RxSeq)
-	if rs == nil {
+	r.l.Debugf("Build MessageProof for bls:%+v", bls)
+	mpd := r.GetMessageProofDataForSeq(bls.RxSeq + 1)
+	if mpd == nil {
 		return nil, nil
 	}
 
-	//TODO refactoring
-	messageCnt := rs.MerkleBinaryTree().Len()
-	if messageCnt > 0 {
-		for i := offset + 1; i < messageCnt; i++ {
-			p, err := rs.MerkleBinaryTree().Proof(offset+1, i)
-			if err != nil {
-				return nil, err
-			}
-
-			if limit < int64(len(codec.RLP.MustMarshalToBytes(p))) {
-				mp := NewMessageProof(bls, bls.RxSeq+int64(i), *p)
-				return mp, nil
-			}
-		}
-	}
-
-	p, err := rs.MerkleBinaryTree().Proof(1, messageCnt)
-	if err != nil {
-		return nil, err
-	}
-	mp := NewMessageProof(bls, bls.RxSeq /*+int64(messageCnt)*/, *p)
+	// TODO handle oversize mp
+	mp := NewMessageProof(bls, mpd.EndSeq, mpd)
 	return mp, nil
 }
 
@@ -244,7 +229,7 @@ func (r *receiver) BuildRelayMessage(rmis []link.RelayMessageItem) ([]byte, erro
 	}
 
 	for i, rmi := range rmis {
-		r.l.Debugf("Build relay message(%d). type:%d, len:%d", i, rmi.Type(), rmi.Len())
+		r.l.Debugf("Build relay message #%d. type:%d, len:%d", i, rmi.Type(), rmi.Len())
 		tpm, err := NewTypePrefixedMessage(rmi)
 		if err != nil {
 			return nil, err
@@ -273,7 +258,7 @@ func (r *receiver) clearData(bls *types.BMCLinkStatus) {
 		}
 	}
 	for i, mp := range r.mps {
-		if mp.Height() == bls.Verifier.Height && mp.Seq() == bls.RxSeq {
+		if mp.EndSeq == bls.RxSeq {
 			r.mps = r.mps[i+1:]
 		}
 	}
@@ -285,41 +270,56 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 		r.l.Debug(err)
 		return err
 	}
+	if bls.RxSeq != 0 {
+		r.seq = bls.RxSeq
+	}
+
+	if r.prevRS == nil {
+		r.prevRS = &receiveStatus{
+			seq:    bls.RxSeq,
+			height: bls.Verifier.Height,
+		}
+	}
 
 	eth2Topics := []string{client.TopicLCOptimisticUpdate, client.TopicLCFinalityUpdate}
 	r.l.Debugf("Start ethereum monitoring")
 	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
 		if event.Topic == client.TopicLCOptimisticUpdate {
 			update := event.Data.(*altair.LightClientOptimisticUpdate)
-			r.l.Debugf("Get light client optimistic update. slot:%d", update.AttestedHeader.Beacon.Slot)
-			mp, err := r.makeMessageProofData(
-				bls,
-				int64(update.AttestedHeader.Beacon.Slot),
-				update.AttestedHeader,
-			)
+			slot := update.AttestedHeader.Beacon.Slot
+			r.l.Debugf("Get light client optimistic update. slot:%d", slot)
+			mp, err := r.makeMessageProofData(update.AttestedHeader)
 			if err != nil {
-				r.l.Debugf("failed to make messageProofData. %+v", err)
+				if errors.IllegalArgumentError.Equals(err) {
+					err = r.appendMissingMessagesProofData(bls.Verifier.Height-SlotPerEpoch, int64(slot))
+					if err != nil {
+						r.l.Panicf("failed to add missing message. %+v", err)
+					}
+				}
 				return
 			}
 			if mp != nil {
+				r.seq += mp.MessageCount()
 				r.mps = append(r.mps, mp)
-				r.l.Debugf("add new mp:%+v", mp)
+				r.l.Debugf("append new mp:%+v", mp)
 			}
 		} else if event.Topic == client.TopicLCFinalityUpdate {
-			bu, err := r.handleFinalityUpdate(bls, event.Data.(*altair.LightClientFinalityUpdate))
-			r.l.Debugf("Get light client finality update. slot:%d", bu.FinalizedHeader.Beacon.Slot)
+			bu, err := r.makeBlockUpdateData(bls, event.Data.(*altair.LightClientFinalityUpdate))
+			slot := int64(bu.FinalizedHeader.Beacon.Slot)
+			r.l.Debugf("Get light client finality update. slot:%d", slot)
 			if err != nil {
 				r.l.Debugf("failed to make blockUpdateData. %+v", err)
 				return
 			}
-			var lastSeq int64
-			if len(r.rss) > 0 {
-				lrs := r.rss[len(r.rss)-1]
-				lastSeq = lrs.Seq()
+			lastSeq := r.prevRS.Seq()
+			lmp := r.GetLastMessageProofDataForHeight(slot)
+			if lmp != nil {
+				lastSeq = lmp.EndSeq
 			}
-			rs := newReceiveStatus(lastSeq, bu)
+			rs := &receiveStatus{seq: lastSeq, height: int64(bu.FinalizedHeader.Beacon.Slot), bu: bu}
 			r.rss = append(r.rss, rs)
 			r.rsc <- rs
+			r.prevRS = rs
 		}
 	}); err != nil {
 		r.l.Debugf("onError %+v", err)
@@ -327,7 +327,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	return nil
 }
 
-func (r *receiver) handleFinalityUpdate(
+func (r *receiver) makeBlockUpdateData(
 	bls *types.BMCLinkStatus,
 	update *altair.LightClientFinalityUpdate,
 ) (*blockUpdateData, error) {
@@ -365,51 +365,54 @@ func (r *receiver) handleFinalityUpdate(
 	return bu, nil
 }
 
-var eventSignatureTopic = crypto.Keccak256([]byte(eventSignature))
+func (r *receiver) appendMissingMessagesProofData(from, to int64) error {
+	r.l.Debugf("start to find missing BTP messages from %d to %d", from, to)
+	for i := from; i <= to; i++ {
+		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(i, 10))
+		if bh == nil || err != nil {
+			continue
+		}
+		mp, err := r.makeMessageProofData(&altair.LightClientHeader{Beacon: bh.Header.Message})
+		if err != nil {
+			return err
+		}
+		if mp == nil {
+			continue
+		}
+		r.seq += mp.MessageCount()
+		r.mps = append(r.mps, mp)
+		r.l.Debugf("append missing mp:%+v", mp)
+	}
+	return nil
+}
 
-func (r *receiver) makeMessageProofData(
-	bls *types.BMCLinkStatus,
-	slot int64,
-	header *altair.LightClientHeader,
-) (mp *messageProofData, err error) {
+func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *messageProofData, err error) {
+	slot := int64(header.Beacon.Slot)
 	elBlockNum, err := r.cl.SlotToBlockNumber(phase0.Slot(slot))
 	if err != nil {
-		return
-	}
-	elBlock, err := r.el.BlockByNumber(big.NewInt(int64(elBlockNum)))
-	if err != nil {
+		if errors.NotFoundError.Equals(err) {
+			err = nil
+			return
+		}
 		return
 	}
 
-	logs, err := r.getEventLogs(elBlock, bls.RxSeq)
+	bn := big.NewInt(int64(elBlockNum))
+	logs, err := r.getEventLogs(bn, bn)
 	if err != nil {
 		return
 	}
-	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d", len(logs), slot, elBlockNum)
 	if len(logs) == 0 {
 		return
 	}
+	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d ", len(logs), slot, elBlockNum)
 
-	// make receiptProofs for receipts
-	receipts, err := r.getReceipts(elBlock)
-	if err != nil {
-		return
-	}
-
-	receiptProofs, err := makeReceiptProofs(receipts, logs)
+	receiptProofs, err := r.makeReceiptProofs(logs)
 	if err != nil {
 		return
 	}
 
-	// make receiptsRootProof
-	rrProof, err := r.cl.GetReceiptsRootProof(slot)
-	if err != nil {
-		return
-	}
-	receiptsRootProof, err := treeOffsetProofToSSZProof(rrProof)
-	if err != nil {
-		return
-	}
+	receiptsRootProof, err := r.makeReceiptsRootProof(slot)
 
 	bms, _ := r.bmc.ParseMessage(logs[0])
 	bme, _ := r.bmc.ParseMessage(logs[len(logs)-1])
@@ -426,49 +429,124 @@ func (r *receiver) makeMessageProofData(
 	return
 }
 
-func (r *receiver) getEventLogs(block *etypes.Block, startSeq int64) ([]etypes.Log, error) {
-	if !block.Bloom().Test(eventSignatureTopic) {
-		return nil, nil
-	}
-
+func (r *receiver) getEventLogs(from, to *big.Int) ([]etypes.Log, error) {
 	fq := *r.fq
-	bHash := block.Hash()
-	fq.BlockHash = &bHash
+	fq.FromBlock = from
+	fq.ToBlock = to
 	logs, err := r.el.FilterLogs(fq)
 	for err != nil {
 		return nil, err
 	}
 
-	seq := startSeq
+	seq := r.seq + 1
 	for i, l := range logs {
 		message, err := r.bmc.ParseMessage(l)
 		if err != nil {
 			return nil, err
 		}
 		if seq != message.Seq.Int64() {
-			r.l.Warnf("sequence number of BTP message is not continuous (e:%d r:%d)", seq, message.Seq.Int64())
-			// TODO remove from logs?
+			err = errors.IllegalArgumentError.Errorf(
+				"sequence number of BTP message is not continuous (e:%d r:%d)",
+				seq, message.Seq.Int64(),
+			)
+			return nil, err
 		}
-		r.l.Debugf("BTPMessage#%d[seq:%d] dst:%s", i, message.Seq, r.dst.String())
+		r.l.Debugf("BTP Message#%d[seq:%d] dst:%s", i, message.Seq, r.dst.String())
 		seq += 1
 	}
 	return logs, nil
 }
 
-func (r *receiver) getReceipts(block *etypes.Block) ([]*etypes.Receipt, error) {
-	size := len(block.Transactions())
-	receipts := make([]*etypes.Receipt, size, size)
-	for i, tx := range block.Transactions() {
-		receipt, err := r.el.TransactionReceipt(tx.Hash())
+// makeReceiptProofs make proofs for receipts which has BTP message
+func (r *receiver) makeReceiptProofs(logs []etypes.Log) ([]*receiptProof, error) {
+	receipts, err := r.getReceipts(logs)
+	if err != nil {
+		return nil, err
+	}
+
+	receiptTrie, _, err := trieFromReceipts(receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	return getReceiptProofs(receiptTrie, logs)
+}
+
+func (r *receiver) getReceipts(logs []etypes.Log) ([]*etypes.Receipt, error) {
+	r.l.Debugf("getReceipts")
+	receipts := make([]*etypes.Receipt, 0)
+	var prevHash common.Hash
+	for _, l := range logs {
+		if bytes.Compare(prevHash[:], l.TxHash[:]) == 0 {
+			continue
+		} else {
+			copy(prevHash[:], l.TxHash[:])
+		}
+		receipt, err := r.el.TransactionReceipt(l.TxHash)
 		if err != nil {
 			return nil, err
 		}
-		receipts[i] = receipt
+		receipts = append(receipts, receipt)
 	}
 	return receipts, nil
 }
 
-func treeOffsetProofToSSZProof(data []byte) (*ssz.Proof, error) {
+// trieFromReceipts make receipt MPT with receipts
+func trieFromReceipts(receipts etypes.Receipts) (tr *trie.Trie, db *trie.Database, err error) {
+	db = trie.NewDatabase(rawdb.NewMemoryDatabase())
+	tr = trie.NewEmpty(db)
+
+	for i := 0; i < receipts.Len(); i++ {
+		var path, rawReceipt []byte
+		path, err = rlp.EncodeToBytes(uint64(i))
+		if err != nil {
+			return
+		}
+
+		rawReceipt, err = receipts[i].MarshalBinary()
+		if err != nil {
+			return
+		}
+		tr.Update(path, rawReceipt)
+	}
+	return
+}
+
+func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error) {
+	keys := make(map[uint]bool)
+	rps := make([]*receiptProof, 0)
+	for _, l := range logs {
+		if _, ok := keys[l.TxIndex]; ok {
+			continue
+		}
+		keys[l.TxIndex] = true
+		key, err := rlp.EncodeToBytes(uint64(l.TxIndex))
+		if err != nil {
+			return nil, err
+		}
+		nodes := light.NewNodeSet()
+		err = tr.Prove(key, 0, nodes)
+		if err != nil {
+			return nil, err
+		}
+		proof, err := rlp.EncodeToBytes(nodes.NodeList())
+		if err != nil {
+			return nil, err
+		}
+		rps = append(rps, &receiptProof{Key: key, Proof: proof})
+	}
+	return rps, nil
+}
+
+func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
+	rrProof, err := r.cl.GetReceiptsRootProof(slot)
+	if err != nil {
+		return nil, err
+	}
+	return TreeOffsetProofToSSZProof(rrProof)
+}
+
+func TreeOffsetProofToSSZProof(data []byte) (*ssz.Proof, error) {
 	proofType := int(data[0])
 	if proofType != 1 {
 		return nil, fmt.Errorf("invalid proof type. %d", proofType)
@@ -537,61 +615,4 @@ func treeOffsetProofToNode(offsets []uint16, leaves [][]byte) (*ssz.Node, error)
 		}
 		return ssz.NewNodeWithLR(left, right), nil
 	}
-}
-
-// makeReceiptProofs make EL Receipt Trie and proof for receipt which has BTP message
-func makeReceiptProofs(receipts []*etypes.Receipt, logs []etypes.Log) ([]*receiptProof, error) {
-	receiptTrie, _, err := trieFromReceipts(receipts)
-	if err != nil {
-		return nil, err
-	}
-
-	return getReceiptProofs(receiptTrie, logs)
-}
-
-// trieFromReceipts make receipt MPT with receipts
-func trieFromReceipts(receipts etypes.Receipts) (tr *trie.Trie, db *trie.Database, err error) {
-	db = trie.NewDatabase(rawdb.NewMemoryDatabase())
-	tr = trie.NewEmpty(db)
-
-	for i := 0; i < receipts.Len(); i++ {
-		var path, rawReceipt []byte
-		path, err = rlp.EncodeToBytes(uint64(i))
-		if err != nil {
-			return
-		}
-
-		rawReceipt, err = receipts[i].MarshalBinary()
-		if err != nil {
-			return
-		}
-		tr.Update(path, rawReceipt)
-	}
-	return
-}
-
-func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error) {
-	keys := make(map[uint]bool)
-	rps := make([]*receiptProof, 0)
-	for _, l := range logs {
-		if _, ok := keys[l.TxIndex]; ok {
-			continue
-		}
-		keys[l.TxIndex] = true
-		key, err := rlp.EncodeToBytes(uint64(l.TxIndex))
-		if err != nil {
-			return nil, err
-		}
-		nodes := light.NewNodeSet()
-		err = tr.Prove(key, 0, nodes)
-		if err != nil {
-			return nil, err
-		}
-		proof, err := rlp.EncodeToBytes(nodes.NodeList())
-		if err != nil {
-			return nil, err
-		}
-		rps = append(rps, &receiptProof{Key: key, Proof: proof})
-	}
-	return rps, nil
 }
