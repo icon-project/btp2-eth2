@@ -189,7 +189,14 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 	}
 
 	// make BlockProof for mp
-	path := fmt.Sprintf("[\"blocks\", \"%d\"]", SlotToHistoricalIndex(phase0.Slot(mp.Slot)))
+	var path string
+	if SlotToHistoricalRootsIndex(phase0.Slot(bls.Verifier.Height)) ==
+		SlotToHistoricalRootsIndex(phase0.Slot(mp.Slot)) {
+		path = fmt.Sprintf("[\"blockRoots\",%d]", SlotToBlockRootsIndex(phase0.Slot(mp.Slot)))
+	} else {
+		// TODO need verification logic and tests
+		path = fmt.Sprintf("[\"historicalRoots\",%d]", SlotToHistoricalRootsIndex(phase0.Slot(mp.Slot)))
+	}
 	proof, err := r.cl.GetStateProofWithPath("finalized", path)
 	if err != nil {
 		return nil, err

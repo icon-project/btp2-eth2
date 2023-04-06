@@ -28,6 +28,10 @@ func IsSyncCommitteeEdge(s phase0.Slot) bool {
 	return (SlotToEpoch(s) % EpochsPerSyncCommitteePeriod) == 0
 }
 
-func SlotToHistoricalIndex(s phase0.Slot) int {
+func SlotToBlockRootsIndex(s phase0.Slot) int {
 	return int(s % SlotsPerHistoricalRoot)
+}
+
+func SlotToHistoricalRootsIndex(s phase0.Slot) int {
+	return int(s / SlotsPerHistoricalRoot)
 }
