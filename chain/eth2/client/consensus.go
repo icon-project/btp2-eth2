@@ -69,7 +69,7 @@ func (c *ConsensusLayer) LightClientFinalityUpdate() (*altair.LightClientFinalit
 
 func (c *ConsensusLayer) GetStateProofWithPath(stateId, path string) ([]byte, error) {
 	// TODO this api is not public, so do not query via go-eth2-client
-	url := fmt.Sprintf("%s/eth/v0/beacon/proof/state/%s?paths=[%s]", c.uri, stateId, path)
+	url := fmt.Sprintf("%s/eth/v0/beacon/icon/proof/state/%s?paths=%s", c.uri, stateId, path)
 	resp, err := nhttp.Get(url)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (c *ConsensusLayer) GetStateProofWithPath(stateId, path string) ([]byte, er
 
 func (c *ConsensusLayer) GetReceiptsRootProof(slot int64) ([]byte, error) {
 	// TODO this api is not public, so do not query via go-eth2-client
-	url := fmt.Sprintf("%s/eth/v0/beacon/proof/state/receiptsRoot/%d", c.uri, slot)
+	url := fmt.Sprintf("%s/eth/v0/beacon/icon/proof/state/receiptsRoot/%d", c.uri, slot)
 	resp, err := nhttp.Get(url)
 	if err != nil {
 		return nil, err
