@@ -17,6 +17,7 @@
 package eth2
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -274,6 +275,17 @@ func (b *blockProofData) RLPDecodeSelf(d codec.Decoder) error {
 	return nil
 }
 
+func (b *blockProofData) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v', 's':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "blockProofData{Header:%+v Proof=%+v)", b.Header, b.Proof)
+		} else {
+			fmt.Fprintf(f, "blockProofData{%v %v)", b.Header, b.Proof)
+		}
+	}
+}
+
 type messageProofData struct {
 	Slot              int64
 	ReceiptsRootProof *ssz.Proof
@@ -318,9 +330,35 @@ func (m *messageProofData) RLPDecodeSelf(d codec.Decoder) error {
 	return nil
 }
 
+func (m *messageProofData) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v', 's':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "messageProofData{Slot:%d ReceiptsRootProof=%+v ReceiptProofs=%+v)",
+				m.Slot, m.ReceiptsRootProof, m.ReceiptProofs)
+		} else {
+			fmt.Fprintf(f, "messageProofData{%d %v %v)",
+				m.Slot, m.ReceiptsRootProof, m.ReceiptProofs)
+		}
+	}
+}
+
 type receiptProof struct {
 	Key   []byte `json:"key"`   // rlp.encode(receipt index)
 	Proof []byte `json:"proof"` // proof for receipt
+}
+
+func (r *receiptProof) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v', 's':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "receiptProof{Key:%s Proof=%s)",
+				hex.EncodeToString(r.Key), hex.EncodeToString(r.Proof))
+		} else {
+			fmt.Fprintf(f, "receiptProof{%x %x)",
+				hex.EncodeToString(r.Key), hex.EncodeToString(r.Proof))
+		}
+	}
 }
 
 type BMVExtra struct {
