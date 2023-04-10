@@ -1,7 +1,8 @@
 [submodule "solidity"]
 	path = solidity
 	url = https://github.com/icon-project/btp2-solidity
+	branch = main
 [submodule "javascore"]
 	path = javascore
 	url = https://github.com/icon-project/btp2-java
-	branch = ether2
+	branch = main
