@@ -17,8 +17,8 @@
 package eth2
 
 import (
-	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
@@ -224,6 +224,9 @@ func (r *receiver) BuildMessageProof(bls *types.BMCLinkStatus, limit int64) (lin
 	if mpd == nil {
 		return nil, nil
 	}
+	if bls.Verifier.Height < mpd.Height() {
+		return nil, nil
+	}
 
 	// TODO handle oversize mp
 	mp := NewMessageProof(bls, mpd.EndSeq, mpd)
@@ -388,7 +391,7 @@ func (r *receiver) appendMissingMessagesProofData(from, to int64) error {
 		}
 		r.seq += mp.MessageCount()
 		r.mps = append(r.mps, mp)
-		r.l.Debugf("append missing mp:%+v", mp)
+		r.l.Debugf("append missing mp:%+v, %s", mp, hex.EncodeToString(codec.RLP.MustMarshalToBytes(mp)))
 	}
 	return nil
 }
@@ -412,9 +415,9 @@ func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *m
 	if len(logs) == 0 {
 		return
 	}
-	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d ", len(logs), slot, elBlockNum)
+	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d", len(logs), slot, elBlockNum)
 
-	receiptProofs, err := r.makeReceiptProofs(logs)
+	receiptProofs, err := r.makeReceiptProofs(bn, logs)
 	if err != nil {
 		return
 	}
@@ -465,13 +468,13 @@ func (r *receiver) getEventLogs(from, to *big.Int) ([]etypes.Log, error) {
 }
 
 // makeReceiptProofs make proofs for receipts which has BTP message
-func (r *receiver) makeReceiptProofs(logs []etypes.Log) ([]*receiptProof, error) {
-	receipts, err := r.getReceipts(logs)
+func (r *receiver) makeReceiptProofs(bn *big.Int, logs []etypes.Log) ([]*receiptProof, error) {
+	receipts, err := r.getReceipts(bn)
 	if err != nil {
 		return nil, err
 	}
 
-	receiptTrie, _, err := trieFromReceipts(receipts)
+	receiptTrie, err := trieFromReceipts(receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -479,17 +482,16 @@ func (r *receiver) makeReceiptProofs(logs []etypes.Log) ([]*receiptProof, error)
 	return getReceiptProofs(receiptTrie, logs)
 }
 
-func (r *receiver) getReceipts(logs []etypes.Log) ([]*etypes.Receipt, error) {
+func (r *receiver) getReceipts(bn *big.Int) ([]*etypes.Receipt, error) {
 	r.l.Debugf("getReceipts")
+	block, err := r.el.BlockByNumber(bn)
+	if err != nil {
+		return nil, err
+	}
+
 	receipts := make([]*etypes.Receipt, 0)
-	var prevHash common.Hash
-	for _, l := range logs {
-		if bytes.Compare(prevHash[:], l.TxHash[:]) == 0 {
-			continue
-		} else {
-			copy(prevHash[:], l.TxHash[:])
-		}
-		receipt, err := r.el.TransactionReceipt(l.TxHash)
+	for _, tx := range block.Transactions() {
+		receipt, err := r.el.TransactionReceipt(tx.Hash())
 		if err != nil {
 			return nil, err
 		}
@@ -499,35 +501,35 @@ func (r *receiver) getReceipts(logs []etypes.Log) ([]*etypes.Receipt, error) {
 }
 
 // trieFromReceipts make receipt MPT with receipts
-func trieFromReceipts(receipts etypes.Receipts) (tr *trie.Trie, db *trie.Database, err error) {
-	db = trie.NewDatabase(rawdb.NewMemoryDatabase())
-	tr = trie.NewEmpty(db)
+func trieFromReceipts(receipts etypes.Receipts) (*trie.Trie, error) {
+	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	trie := trie.NewEmpty(db)
 
-	for i := 0; i < receipts.Len(); i++ {
-		var path, rawReceipt []byte
-		path, err = rlp.EncodeToBytes(uint64(i))
+	for _, r := range receipts {
+		key, err := rlp.EncodeToBytes(r.TransactionIndex)
 		if err != nil {
-			return
+			return nil, err
 		}
 
-		rawReceipt, err = receipts[i].MarshalBinary()
+		rawReceipt, err := r.MarshalBinary()
 		if err != nil {
-			return
+			return nil, err
 		}
-		tr.Update(path, rawReceipt)
+		trie.Update(key, rawReceipt)
 	}
-	return
+	return trie, nil
 }
 
 func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error) {
 	keys := make(map[uint]bool)
 	rps := make([]*receiptProof, 0)
 	for _, l := range logs {
-		if _, ok := keys[l.TxIndex]; ok {
+		idx := l.TxIndex
+		if _, ok := keys[idx]; ok {
 			continue
 		}
-		keys[l.TxIndex] = true
-		key, err := rlp.EncodeToBytes(uint64(l.TxIndex))
+		keys[idx] = true
+		key, err := rlp.EncodeToBytes(idx)
 		if err != nil {
 			return nil, err
 		}
