@@ -17,6 +17,7 @@
 package eth2
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -121,6 +122,7 @@ func (r *receiver) Start(bls *types.BMCLinkStatus) (<-chan link.ReceiveStatus, e
 
 func (r *receiver) Stop() {
 	close(r.rsc)
+	r.cl.Term()
 }
 
 func (r *receiver) GetStatus() (link.ReceiveStatus, error) {
@@ -188,7 +190,10 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 		return nil, fmt.Errorf("invalid height %d", height)
 	}
 
-	// make BlockProof for mp
+	return r.blockProofForMessageProof(bls, mp)
+}
+
+func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messageProofData) (link.BlockProof, error) {
 	var path string
 	if SlotToHistoricalRootsIndex(phase0.Slot(bls.Verifier.Height)) ==
 		SlotToHistoricalRootsIndex(phase0.Slot(mp.Slot)) {
@@ -197,13 +202,18 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 		// TODO need verification logic and tests
 		path = fmt.Sprintf("[\"historicalRoots\",%d]", SlotToHistoricalRootsIndex(phase0.Slot(mp.Slot)))
 	}
-	proof, err := r.cl.GetStateProofWithPath("finalized", path)
+	proof, err := r.cl.GetStateProofWithPath(strconv.FormatInt(bls.Verifier.Height, 10), path)
 	if err != nil {
 		return nil, err
 	}
 	bp, err := TreeOffsetProofToSSZProof(proof)
 	if err != nil {
 		return nil, err
+	}
+	root, err := mp.Header.Beacon.HashTreeRoot()
+	r.l.Debugf("BlockProof via %s : headerRoot: %x, proofLeaf: %x", path, root, bp.Leaf)
+	if bytes.Compare(root[:], bp.Leaf[:]) != 0 {
+		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. header.HashTreeRoot != bp.Leaf")
 	}
 	bpd := &blockProofData{
 		Header: mp.Header,
@@ -214,7 +224,7 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 			it:      link.TypeBlockProof,
 			payload: codec.RLP.MustMarshalToBytes(bpd),
 		},
-		ph: height,
+		ph: mp.Slot,
 	}, nil
 }
 
@@ -483,7 +493,6 @@ func (r *receiver) makeReceiptProofs(bn *big.Int, logs []etypes.Log) ([]*receipt
 }
 
 func (r *receiver) getReceipts(bn *big.Int) ([]*etypes.Receipt, error) {
-	r.l.Debugf("getReceipts")
 	block, err := r.el.BlockByNumber(bn)
 	if err != nil {
 		return nil, err
