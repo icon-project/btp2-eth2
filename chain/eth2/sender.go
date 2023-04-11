@@ -17,6 +17,7 @@
 package eth2
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -58,6 +59,17 @@ func (r request) ID() int {
 
 func (r request) TxHash() common.Hash {
 	return r.txHash
+}
+
+func (r request) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v', 's':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "request{id=%d txHash=%#x)", r.id, r.txHash)
+		} else {
+			fmt.Fprintf(f, "request{%d %#x)", r.id, r.txHash)
+		}
+	}
 }
 
 type sender struct {
@@ -113,6 +125,7 @@ func (s *sender) GetStatus() (*types.BMCLinkStatus, error) {
 }
 
 func (s *sender) Relay(rm types.RelayMessage) (int, error) {
+	s.l.Debugf("Relay src address:%s rm id:%d", s.src.String(), rm.Id())
 	t, err := s.el.NewTransactOpts(s.w.(*wallet.EvmWallet).Skey)
 	if err != nil {
 		return 0, err
@@ -137,20 +150,19 @@ func (s *sender) TxSizeLimit() int {
 func (s *sender) addRequest(req *request) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+	s.l.Debugf("add request %+v", req)
 	s.reqs = append(s.reqs, req)
 }
 
-func (s *sender) clearRequest(index int) {
+func (s *sender) removeRequest(id int) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	if index == -1 {
-		s.l.Debugf("clear all requests")
-		s.reqs = make([]*request, 0)
-	} else if index == 0 {
-		s.l.Debugf("clear no requests")
-	} else {
-		s.l.Debugf("clear requests to %d", index)
-		s.reqs = s.reqs[index-1:]
+	for i, req := range s.reqs {
+		if id == req.ID() {
+			s.reqs = append(s.reqs[:i], s.reqs[i+1:]...)
+			s.l.Debugf("remove request %+v", req)
+			return
+		}
 	}
 }
 
@@ -192,10 +204,9 @@ func (s *sender) handleFinalityUpdate() {
 }
 
 func (s *sender) checkRelayResult(to uint64) {
-	var index int
 	var req *request
 	s.mtx.RLock()
-	for index, req = range s.reqs {
+	for _, req = range s.reqs {
 		_, pending, err := s.el.TransactionByHash(req.TxHash())
 		if err != nil {
 			s.l.Panicf("can't get TX %#x. %v", req.TxHash(), err)
@@ -230,11 +241,9 @@ func (s *sender) checkRelayResult(to uint64) {
 			Err:       errCode,
 			Finalized: true,
 		}
+		s.removeRequest(req.ID())
 	}
 	s.mtx.RUnlock()
-
-	// TODO how to clear request
-	s.clearRequest(index)
 }
 
 func (s *sender) receiptToRevertError(receipt *etypes.Receipt) error {
