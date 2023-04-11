@@ -332,14 +332,17 @@ func (m *messageProofData) RLPDecodeSelf(d codec.Decoder) error {
 
 func (m *messageProofData) Format(f fmt.State, c rune) {
 	switch c {
-	case 'v', 's':
+	case 'v':
 		if f.Flag('+') {
-			fmt.Fprintf(f, "messageProofData{Slot:%d ReceiptsRootProof=%+v ReceiptProofs=%+v)",
-				m.Slot, m.ReceiptsRootProof, m.ReceiptProofs)
+			fmt.Fprintf(f, "messageProofData{Slot=%d StartSeq=%d EndSeq=%d ReceiptsRootProof=%+v ReceiptProofs=%+v)",
+				m.Slot, m.StartSeq, m.EndSeq, m.ReceiptsRootProof, m.ReceiptProofs)
 		} else {
-			fmt.Fprintf(f, "messageProofData{%d %v %v)",
-				m.Slot, m.ReceiptsRootProof, m.ReceiptProofs)
+			fmt.Fprintf(f, "messageProofData{%d %d %d %v %v)",
+				m.Slot, m.StartSeq, m.EndSeq, m.ReceiptsRootProof, m.ReceiptProofs)
 		}
+	case 's':
+		fmt.Fprintf(f, "messageProofData{Slot:%d StartSeq=%d EndSeq=%d)",
+			m.Slot, m.StartSeq, m.EndSeq)
 	}
 }
 
@@ -352,7 +355,7 @@ func (r *receiptProof) Format(f fmt.State, c rune) {
 	switch c {
 	case 'v', 's':
 		if f.Flag('+') {
-			fmt.Fprintf(f, "receiptProof{Key:%s Proof=%s)",
+			fmt.Fprintf(f, "receiptProof{Key=%s Proof=%s)",
 				hex.EncodeToString(r.Key), hex.EncodeToString(r.Proof))
 		} else {
 			fmt.Fprintf(f, "receiptProof{%x %x)",
