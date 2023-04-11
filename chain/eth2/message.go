@@ -84,17 +84,18 @@ func (c *BlockUpdate) TargetHeight() int64 {
 	return c.targetHeight
 }
 
-func NewBlockUpdate(bls *types.BMCLinkStatus, targetHeight int64, v interface{}) *BlockUpdate {
+func NewBlockUpdate(srcHeight int64, data *blockUpdateData) *BlockUpdate {
+	targetHeight := int64(data.FinalizedHeader.Beacon.Slot)
 	nextBls := &types.BMCLinkStatus{}
 	nextBls.Verifier.Height = targetHeight
 	return &BlockUpdate{
-		srcHeight:    bls.Verifier.Height,
+		srcHeight:    srcHeight,
 		targetHeight: targetHeight,
 		BlockProof: BlockProof{
 			relayMessageItem: relayMessageItem{
 				it:      link.TypeBlockUpdate,
 				nextBls: nextBls,
-				payload: codec.RLP.MustMarshalToBytes(v),
+				payload: codec.RLP.MustMarshalToBytes(data),
 			},
 			ph: -1, // to make BlockProof
 		},

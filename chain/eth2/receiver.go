@@ -53,7 +53,7 @@ const (
 type receiveStatus struct {
 	slot int64 // finalized slot
 	seq  int64 // last sequence number at slot
-	bu   *blockUpdateData
+	bus  []*blockUpdateData
 }
 
 func (r *receiveStatus) Height() int64 {
@@ -187,9 +187,14 @@ func (r *receiver) BuildBlockUpdate(bls *types.BMCLinkStatus, limit int64) ([]li
 	// TODO call r.clearData() at r.FinalizedStatus() ?
 	r.clearData(bls)
 	bus := make([]link.BlockUpdate, 0)
+	srcHeight := bls.Verifier.Height
 	for _, rs := range r.rss {
-		bu := NewBlockUpdate(bls, rs.Height(), rs.bu)
-		bus = append(bus, bu)
+		r.l.Debugf("Build BlockUpdate for H:%d", rs.Height())
+		for _, blockUpdate := range rs.bus {
+			bu := NewBlockUpdate(srcHeight, blockUpdate)
+			bus = append(bus, bu)
+			srcHeight = int64(blockUpdate.FinalizedHeader.Beacon.Slot)
+		}
 	}
 	return bus, nil
 }
@@ -197,11 +202,11 @@ func (r *receiver) BuildBlockUpdate(bls *types.BMCLinkStatus, limit int64) ([]li
 func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link.BlockProof, error) {
 	r.l.Debugf("Build BlockProof for H:%d", height)
 	if height > bls.Verifier.Height {
-		return nil, errors.InvalidStateError.Errorf("%s slot is not yet finalized", height)
+		return nil, errors.InvalidStateError.Errorf("%d slot is not yet finalized", height)
 	}
 	mp := r.GetMessageProofDataForHeight(height)
 	if mp == nil {
-		return nil, errors.InvalidStateError.Errorf("there is no message at height %d", height)
+		return nil, errors.InvalidStateError.Errorf("there is no message at slot %d", height)
 	}
 
 	return r.blockProofForMessageProof(bls, mp)
@@ -341,9 +346,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Debugf("append new mp:%+v", mp)
 			}
 		} else if event.Topic == client.TopicLCFinalityUpdate {
-			bu, err := r.makeBlockUpdateData(bls, event.Data.(*altair.LightClientFinalityUpdate))
-			slot := int64(bu.FinalizedHeader.Beacon.Slot)
+			update := event.Data.(*altair.LightClientFinalityUpdate)
+			slot := int64(update.FinalizedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client finality update. slot:%d", slot)
+			bus, err := r.makeBlockUpdateDatas(bls, update)
 			if err != nil {
 				r.l.Debugf("failed to make blockUpdateData. %+v", err)
 				return
@@ -353,7 +359,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			if lmp != nil {
 				lastSeq = lmp.EndSeq
 			}
-			rs := &receiveStatus{seq: lastSeq, slot: int64(bu.FinalizedHeader.Beacon.Slot), bu: bu}
+			rs := &receiveStatus{seq: lastSeq, slot: slot, bus: bus}
 			r.rss = append(r.rss, rs)
 			r.rsc <- rs
 			r.prevRS = rs
@@ -364,32 +370,46 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	return nil
 }
 
-func (r *receiver) makeBlockUpdateData(
+func (r *receiver) makeBlockUpdateDatas(
 	bls *types.BMCLinkStatus,
 	update *altair.LightClientFinalityUpdate,
-) (*blockUpdateData, error) {
+) ([]*blockUpdateData, error) {
 	var nsc *altair.SyncCommittee
 	var nscBranch [][]byte
-	slot := update.FinalizedHeader.Beacon.Slot
+	bus := make([]*blockUpdateData, 0)
+	scPeriod := SlotToSyncCommitteePeriod(update.FinalizedHeader.Beacon.Slot)
 
-	r.l.Debugf("SyncCommittee Period: %d -> %d",
-		SyncCommitteePeriodAtSlot(phase0.Slot(bls.Verifier.Height)),
-		SyncCommitteePeriodAtSlot(slot),
-	)
-
-	if IsSyncCommitteeEdge(slot) {
-		r.l.Debugf("Make NextSyncCommittee")
-		lcUpdate, err := r.cl.LightClientUpdates(SyncCommitteePeriodAtSlot(slot), 1)
+	if SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))+1 == scPeriod {
+		r.l.Debugf("make NextSyncCommittee %d", scPeriod)
+		lcUpdate, err := r.cl.LightClientUpdates(scPeriod, 1)
 		if err != nil {
 			return nil, err
 		}
 		if len(lcUpdate) != 1 {
 			return nil, fmt.Errorf("invalid light client updates length")
 		}
-		nsc = lcUpdate[0].NextSyncCommittee
-		copy(nscBranch, lcUpdate[0].NextSyncCommitteeBranch)
+		lcu := lcUpdate[0]
+		if !IsSyncCommitteeEdge(update.FinalizedHeader.Beacon.Slot) {
+			// append blockUpdateData made by lightClientUpdate
+			r.l.Debugf("finality update is not Period edge. make blockUpdateData for nextSyncCommittee")
+			bu := &blockUpdateData{
+				AttestedHeader:          lcu.AttestedHeader,
+				FinalizedHeader:         lcu.FinalizedHeader,
+				FinalizedHeaderBranch:   lcu.FinalityBranch,
+				SyncAggregate:           lcu.SyncAggregate,
+				SignatureSlot:           lcu.SignatureSlot,
+				NextSyncCommittee:       lcu.NextSyncCommittee,
+				NextSyncCommitteeBranch: lcu.NextSyncCommitteeBranch,
+			}
+			bus = append(bus, bu)
+		} else {
+			nsc = lcu.NextSyncCommittee
+			nscBranch = lcu.NextSyncCommitteeBranch
+		}
 	}
 
+	// append blockUpdateData made by FinalityUpdate
+	r.l.Debugf("make blockUpdateData for finality update")
 	bu := &blockUpdateData{
 		AttestedHeader:          update.AttestedHeader,
 		FinalizedHeader:         update.FinalizedHeader,
@@ -399,7 +419,9 @@ func (r *receiver) makeBlockUpdateData(
 		NextSyncCommittee:       nsc,
 		NextSyncCommitteeBranch: nscBranch,
 	}
-	return bu, nil
+	bus = append(bus, bu)
+
+	return bus, nil
 }
 
 func (r *receiver) appendMissingMessagesProofData(from, to int64) error {

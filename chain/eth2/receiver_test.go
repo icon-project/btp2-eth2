@@ -33,6 +33,85 @@ func newReceiver(src, dest types.BtpAddress) *receiver {
 	return r.(*receiver)
 }
 
+func TestReceiver_BlockUpdate(t *testing.T) {
+	r := newReceiver(
+		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
+		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
+	)
+	defer r.Stop()
+
+	tests := []struct {
+		name     string
+		slotDiff int64
+		buCount  int
+	}{
+		{
+			name:     "without nextSyncCommittee",
+			slotDiff: 0,
+			buCount:  1,
+		},
+		{
+			name:     "with nextSyncCommittee",
+			slotDiff: SlotPerSyncCommitteePeriod,
+			buCount:  2,
+		},
+	}
+
+	for _, tt := range tests {
+		fu, err := r.cl.LightClientFinalityUpdate()
+		assert.NoError(t, err)
+		t.Run(tt.name, func(t *testing.T) {
+			bls := &types.BMCLinkStatus{}
+			bls.Verifier.Height = int64(fu.FinalizedHeader.Beacon.Slot) - tt.slotDiff
+
+			bus, err := r.makeBlockUpdateDatas(bls, fu)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.buCount, len(bus))
+
+			for _, bu := range bus {
+				// verify next sync committee
+				if bu.NextSyncCommittee != nil {
+					leaf, err := bu.NextSyncCommittee.HashTreeRoot()
+					assert.NoError(t, err)
+					verifyBranch(t,
+						55,
+						leaf[:],
+						bu.NextSyncCommitteeBranch,
+						bu.AttestedHeader.Beacon.StateRoot[:],
+					)
+				}
+				// verify finalized header
+				leaf, err := bu.FinalizedHeader.HashTreeRoot()
+				assert.NoError(t, err)
+				verifyBranch(t, 105, leaf[:], bu.FinalizedHeaderBranch, bu.AttestedHeader.Beacon.StateRoot[:])
+				VerifySyncAggregate(t, r, bu)
+
+			}
+		})
+	}
+}
+
+func verifyBranch(t *testing.T, index int, leaf []byte, hashes [][]byte, root []byte) {
+	proof := &ssz.Proof{
+		Index:  index,
+		Leaf:   leaf,
+		Hashes: hashes,
+	}
+	ok, err := ssz.VerifyProof(root, proof)
+	assert.True(t, ok)
+	assert.NoError(t, err)
+}
+
+func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
+	// TODO implement
+	//lcu, err := r.cl.LightClientUpdates(
+	//	SlotToSyncCommitteePeriod(bu.FinalizedHeader.Beacon.Slot)-SlotPerSyncCommitteePeriod,
+	//	1,
+	//)
+	//assert.NoError(t, err)
+	//syncCommittee := lcu[0].NextSyncCommittee
+}
+
 func TestReceiver_BlockProof(t *testing.T) {
 	r := newReceiver(
 		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
@@ -40,19 +119,18 @@ func TestReceiver_BlockProof(t *testing.T) {
 	)
 	defer r.Stop()
 
-	// get Header
 	tests := []struct {
-		name string
-		diff int64
+		name     string
+		slotDiff int64
 	}{
 		{
-			name: "with blockRoots",
-			diff: 101,
+			name:     "with blockRoots",
+			slotDiff: 3,
 		},
 		// TODO add
 		//{
 		//	name: "with historicalRoots",
-		//	diff: 10000,
+		//	slotDiff: 10000,
 		//},
 	}
 
@@ -67,7 +145,7 @@ func TestReceiver_BlockProof(t *testing.T) {
 			bls.Verifier.Height = finalizedSlot
 
 			// get header and set mp
-			blockProofSlot := finalizedSlot - tt.diff
+			blockProofSlot := finalizedSlot - tt.slotDiff
 			header, err := r.cl.BeaconBlockHeader(strconv.FormatInt(blockProofSlot, 10))
 			assert.NoError(t, err)
 
