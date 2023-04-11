@@ -51,17 +51,28 @@ const (
 )
 
 type receiveStatus struct {
-	seq    int64 // last sequence number at height
-	height int64
-	bu     *blockUpdateData
+	slot int64 // finalized slot
+	seq  int64 // last sequence number at slot
+	bu   *blockUpdateData
 }
 
 func (r *receiveStatus) Height() int64 {
-	return r.height
+	return r.slot
 }
 
 func (r *receiveStatus) Seq() int64 {
 	return r.seq
+}
+
+func (r *receiveStatus) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v', 's':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "receiveStatus{slot=%d seq=%d)", r.slot, r.seq)
+		} else {
+			fmt.Fprintf(f, "receiveStatus{%d %d)", r.slot, r.seq)
+		}
+	}
 }
 
 type receiver struct {
@@ -185,9 +196,12 @@ func (r *receiver) BuildBlockUpdate(bls *types.BMCLinkStatus, limit int64) ([]li
 
 func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link.BlockProof, error) {
 	r.l.Debugf("Build BlockProof for H:%d", height)
+	if height > bls.Verifier.Height {
+		return nil, errors.InvalidStateError.Errorf("%s slot is not yet finalized", height)
+	}
 	mp := r.GetMessageProofDataForHeight(height)
 	if mp == nil {
-		return nil, fmt.Errorf("invalid height %d", height)
+		return nil, errors.InvalidStateError.Errorf("there is no message at height %d", height)
 	}
 
 	return r.blockProofForMessageProof(bls, mp)
@@ -211,7 +225,6 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 		return nil, err
 	}
 	root, err := mp.Header.Beacon.HashTreeRoot()
-	r.l.Debugf("BlockProof via %s : headerRoot: %x, proofLeaf: %x", path, root, bp.Leaf)
 	if bytes.Compare(root[:], bp.Leaf[:]) != 0 {
 		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. header.HashTreeRoot != bp.Leaf")
 	}
@@ -219,6 +232,7 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 		Header: mp.Header,
 		Proof:  bp,
 	}
+	r.l.Debugf("new BlockProof for slot:%d via %s", bpd.Header.Beacon.Slot, path)
 	return &BlockProof{
 		relayMessageItem: relayMessageItem{
 			it:      link.TypeBlockProof,
@@ -239,8 +253,8 @@ func (r *receiver) BuildMessageProof(bls *types.BMCLinkStatus, limit int64) (lin
 	}
 
 	// TODO handle oversize mp
-	mp := NewMessageProof(bls, mpd.EndSeq, mpd)
-	return mp, nil
+	r.l.Debugf("new MessageProof with h:%d, seq:%d-%d", mpd.Height(), mpd.StartSeq, mpd.EndSeq)
+	return NewMessageProof(bls, mpd.EndSeq, mpd), nil
 }
 
 func (r *receiver) BuildRelayMessage(rmis []link.RelayMessageItem) ([]byte, error) {
@@ -273,13 +287,16 @@ func (r *receiver) FinalizedStatus(bls <-chan *types.BMCLinkStatus) {
 func (r *receiver) clearData(bls *types.BMCLinkStatus) {
 	for i, rs := range r.rss {
 		if rs.Height() == bls.Verifier.Height && rs.Seq() == bls.RxSeq {
+			r.l.Debugf("remove receiveStatue to %+v", rs)
 			r.rss = r.rss[i+1:]
-			return
+			break
 		}
 	}
 	for i, mp := range r.mps {
 		if mp.EndSeq == bls.RxSeq {
+			r.l.Debugf("remove messageProofData to %+v", mp)
 			r.mps = r.mps[i+1:]
+			break
 		}
 	}
 }
@@ -296,8 +313,8 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 
 	if r.prevRS == nil {
 		r.prevRS = &receiveStatus{
-			seq:    bls.RxSeq,
-			height: bls.Verifier.Height,
+			slot: bls.Verifier.Height,
+			seq:  bls.RxSeq,
 		}
 	}
 
@@ -336,7 +353,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			if lmp != nil {
 				lastSeq = lmp.EndSeq
 			}
-			rs := &receiveStatus{seq: lastSeq, height: int64(bu.FinalizedHeader.Beacon.Slot), bu: bu}
+			rs := &receiveStatus{seq: lastSeq, slot: int64(bu.FinalizedHeader.Beacon.Slot), bu: bu}
 			r.rss = append(r.rss, rs)
 			r.rsc <- rs
 			r.prevRS = rs
@@ -465,6 +482,7 @@ func (r *receiver) getEventLogs(from, to *big.Int) ([]etypes.Log, error) {
 			return nil, err
 		}
 		if seq != message.Seq.Int64() {
+			// TODO just error?
 			err = errors.IllegalArgumentError.Errorf(
 				"sequence number of BTP message is not continuous (e:%d r:%d)",
 				seq, message.Seq.Int64(),
