@@ -19,11 +19,11 @@ package eth2
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
 	"strconv"
+	"sync"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -134,6 +134,21 @@ func (r *receiver) Start(bls *types.BMCLinkStatus) (<-chan link.ReceiveStatus, e
 func (r *receiver) Stop() {
 	close(r.rsc)
 	r.cl.Term()
+}
+
+func (r *receiver) getStatus() (*types.BMCLinkStatus, error) {
+	status, err := r.bmc.GetStatus(nil, r.dst.String())
+	if err != nil {
+		r.l.Errorf("Error retrieving status %s from BMC. %v", r.dst.String(), err)
+		return nil, err
+	}
+
+	ls := &types.BMCLinkStatus{}
+	ls.TxSeq = status.TxSeq.Int64()
+	ls.RxSeq = status.RxSeq.Int64()
+	ls.Verifier.Height = status.Verifier.Height.Int64()
+	ls.Verifier.Extra = status.Verifier.Extra
+	return ls, nil
 }
 
 func (r *receiver) GetStatus() (link.ReceiveStatus, error) {
@@ -292,14 +307,14 @@ func (r *receiver) FinalizedStatus(bls <-chan *types.BMCLinkStatus) {
 func (r *receiver) clearData(bls *types.BMCLinkStatus) {
 	for i, rs := range r.rss {
 		if rs.Height() == bls.Verifier.Height && rs.Seq() == bls.RxSeq {
-			r.l.Debugf("remove receiveStatue to %+v", rs)
+			r.l.Debugf("remove receiveStatue to %d, %+v", i, rs)
 			r.rss = r.rss[i+1:]
 			break
 		}
 	}
 	for i, mp := range r.mps {
 		if mp.EndSeq == bls.RxSeq {
-			r.l.Debugf("remove messageProofData to %+v", mp)
+			r.l.Debugf("remove messageProofData to %d, %s", i, mp)
 			r.mps = r.mps[i+1:]
 			break
 		}
@@ -307,6 +322,7 @@ func (r *receiver) clearData(bls *types.BMCLinkStatus) {
 }
 
 func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
+	once := new(sync.Once)
 	if bls.Verifier.Height < 1 {
 		err := fmt.Errorf("cannot catchup from zero height")
 		r.l.Debug(err)
@@ -330,20 +346,27 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			update := event.Data.(*altair.LightClientOptimisticUpdate)
 			slot := update.AttestedHeader.Beacon.Slot
 			r.l.Debugf("Get light client optimistic update. slot:%d", slot)
-			mp, err := r.makeMessageProofData(update.AttestedHeader)
-			if err != nil {
-				if errors.IllegalArgumentError.Equals(err) {
-					err = r.appendMissingMessagesProofData(bls.Verifier.Height-SlotPerEpoch, int64(slot))
+			once.Do(func() {
+				r.l.Debugf("Check undelivered messages")
+				status, err := r.getStatus()
+				if err != nil {
+					r.l.Panicf("%+v", err)
+				}
+				if bls.RxSeq < status.TxSeq {
+					err = r.handleUndeliveredMessages(bls.Verifier.Height-SlotPerEpoch, int64(slot)-1)
 					if err != nil {
 						r.l.Panicf("failed to add missing message. %+v", err)
 					}
 				}
+			})
+			mp, err := r.makeMessageProofData(update.AttestedHeader)
+			if err != nil {
 				return
 			}
 			if mp != nil {
 				r.seq += mp.MessageCount()
 				r.mps = append(r.mps, mp)
-				r.l.Debugf("append new mp:%+v", mp)
+				r.l.Debugf("append new mp: %s", mp)
 			}
 		} else if event.Topic == client.TopicLCFinalityUpdate {
 			update := event.Data.(*altair.LightClientFinalityUpdate)
@@ -424,8 +447,8 @@ func (r *receiver) makeBlockUpdateDatas(
 	return bus, nil
 }
 
-func (r *receiver) appendMissingMessagesProofData(from, to int64) error {
-	r.l.Debugf("start to find missing BTP messages from %d to %d", from, to)
+func (r *receiver) handleUndeliveredMessages(from, to int64) error {
+	r.l.Debugf("start to find undelivered BTP messages from %d to %d", from, to)
 	for i := from; i <= to; i++ {
 		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(i, 10))
 		if bh == nil || err != nil {
@@ -440,7 +463,7 @@ func (r *receiver) appendMissingMessagesProofData(from, to int64) error {
 		}
 		r.seq += mp.MessageCount()
 		r.mps = append(r.mps, mp)
-		r.l.Debugf("append missing mp:%+v, %s", mp, hex.EncodeToString(codec.RLP.MustMarshalToBytes(mp)))
+		r.l.Debugf("append undelivered mp: %s", mp)
 	}
 	return nil
 }
@@ -449,10 +472,7 @@ func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *m
 	slot := int64(header.Beacon.Slot)
 	elBlockNum, err := r.cl.SlotToBlockNumber(phase0.Slot(slot))
 	if err != nil {
-		if errors.NotFoundError.Equals(err) {
-			err = nil
-			return
-		}
+		err = errors.NotFoundError.Wrapf(err, "fail to get block number")
 		return
 	}
 
@@ -472,6 +492,9 @@ func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *m
 	}
 
 	receiptsRootProof, err := r.makeReceiptsRootProof(slot)
+	if err != nil {
+		return
+	}
 
 	bms, _ := r.bmc.ParseMessage(logs[0])
 	bme, _ := r.bmc.ParseMessage(logs[len(logs)-1])
@@ -535,6 +558,7 @@ func (r *receiver) makeReceiptProofs(bn *big.Int, logs []etypes.Log) ([]*receipt
 func (r *receiver) getReceipts(bn *big.Int) ([]*etypes.Receipt, error) {
 	block, err := r.el.BlockByNumber(bn)
 	if err != nil {
+		err = errors.NotFoundError.Wrapf(err, "fail to get block %s", bn)
 		return nil, err
 	}
 
@@ -542,6 +566,7 @@ func (r *receiver) getReceipts(bn *big.Int) ([]*etypes.Receipt, error) {
 	for _, tx := range block.Transactions() {
 		receipt, err := r.el.TransactionReceipt(tx.Hash())
 		if err != nil {
+			err = errors.NotFoundError.Wrapf(err, "fail to get transactionReceipt %#x", tx.Hash())
 			return nil, err
 		}
 		receipts = append(receipts, receipt)
@@ -557,11 +582,13 @@ func trieFromReceipts(receipts etypes.Receipts) (*trie.Trie, error) {
 	for _, r := range receipts {
 		key, err := rlp.EncodeToBytes(r.TransactionIndex)
 		if err != nil {
+			err = errors.UnknownError.Wrapf(err, "fail to encode TX index %d", r.TransactionIndex)
 			return nil, err
 		}
 
 		rawReceipt, err := r.MarshalBinary()
 		if err != nil {
+			err = errors.UnknownError.Wrapf(err, "fail to marshal TX receipt %#x", r.TxHash)
 			return nil, err
 		}
 		trie.Update(key, rawReceipt)
@@ -599,6 +626,7 @@ func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error)
 func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
 	rrProof, err := r.cl.GetReceiptsRootProof(slot)
 	if err != nil {
+		err = errors.NotFoundError.Wrapf(err, "fail to make receiptsRoot proof")
 		return nil, err
 	}
 	return TreeOffsetProofToSSZProof(rrProof)
