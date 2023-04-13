@@ -3,6 +3,7 @@ package eth2
 import (
 	"bytes"
 	"fmt"
+	"math/bits"
 	"strconv"
 	"testing"
 
@@ -112,6 +113,12 @@ func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
 	//syncCommittee := lcu[0].NextSyncCommittee
 }
 
+func blockRootsIdxToGIndex(idx int) uint64 {
+	base := uint64(37)
+	offset := uint64(0x2000 + idx)
+	return (base-1)<<(63-bits.LeadingZeros64(offset)) + offset
+}
+
 func TestReceiver_BlockProof(t *testing.T) {
 	r := newReceiver(
 		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
@@ -125,7 +132,11 @@ func TestReceiver_BlockProof(t *testing.T) {
 	}{
 		{
 			name:     "with blockRoots",
-			slotDiff: 3,
+			slotDiff: 5,
+		},
+		{
+			name:     "with blockRoots",
+			slotDiff: 4,
 		},
 		// TODO add
 		//{
@@ -158,6 +169,7 @@ func TestReceiver_BlockProof(t *testing.T) {
 
 			// get BlockProof
 			bp, err := r.blockProofForMessageProof(bls, mp)
+			assert.NotNil(t, bp)
 			assert.NoError(t, err)
 
 			// verify BlockProof

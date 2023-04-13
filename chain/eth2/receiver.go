@@ -225,13 +225,13 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 	if err != nil {
 		return nil, err
 	}
-	bp, err := TreeOffsetProofToSSZProof(proof)
+	bp, err := SingleProofToSSZProof(proof)
 	if err != nil {
 		return nil, err
 	}
 	root, err := mp.Header.Beacon.HashTreeRoot()
 	if bytes.Compare(root[:], bp.Leaf[:]) != 0 {
-		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. header.HashTreeRoot != bp.Leaf")
+		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, bp.Leaf)
 	}
 	bpd := &blockProofData{
 		Header: mp.Header,
@@ -602,6 +602,31 @@ func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
 		return nil, err
 	}
 	return TreeOffsetProofToSSZProof(rrProof)
+}
+
+func SingleProofToSSZProof(data []byte) (*ssz.Proof, error) {
+	proof := &ssz.Proof{}
+	proofType := int(data[0])
+	if proofType != 0 {
+		return nil, fmt.Errorf("invalid proof type. %d", proofType)
+	}
+	dataOffset := 1
+
+	idx := binary.BigEndian.Uint64(data[dataOffset : dataOffset+8])
+	proof.Index = int(idx)
+	dataOffset += 8
+
+	proof.Leaf = data[dataOffset : dataOffset+32]
+	dataOffset += 32
+
+	leafCount := int(math.Log2(float64(proof.Index)))
+	proof.Hashes = make([][]byte, leafCount, leafCount)
+	for i := 0; i < leafCount; i++ {
+		proof.Hashes[i] = data[dataOffset : dataOffset+32]
+		dataOffset += 32
+	}
+
+	return proof, nil
 }
 
 func TreeOffsetProofToSSZProof(data []byte) (*ssz.Proof, error) {
