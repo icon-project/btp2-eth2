@@ -177,7 +177,7 @@ func (s *sender) getStatus(bn uint64) (*types.BMCLinkStatus, error) {
 	status, err := s.bmc.GetStatus(callOpts, s.src.String())
 
 	if err != nil {
-		s.l.Errorf("Error retrieving relay status from BMC")
+		s.l.Errorf("Error retrieving relay status from BMC. %v", err)
 		return nil, err
 	}
 
@@ -195,7 +195,8 @@ func (s *sender) handleFinalityUpdate() {
 		s.l.Debugf("handle finality_update event slot:%d", update.FinalizedHeader.Beacon.Slot)
 		blockNumber, err := s.cl.SlotToBlockNumber(update.FinalizedHeader.Beacon.Slot)
 		if err != nil {
-			s.l.Panicf("can't convert slot to block number. %d", update.FinalizedHeader.Beacon.Slot)
+			s.l.Warnf("can't convert slot to block number. %d", update.FinalizedHeader.Beacon.Slot)
+			return
 		}
 		s.checkRelayResult(blockNumber)
 	}); err != nil {
@@ -204,12 +205,13 @@ func (s *sender) handleFinalityUpdate() {
 }
 
 func (s *sender) checkRelayResult(to uint64) {
-	var req *request
+	finished := make([]*request, 0)
 	s.mtx.RLock()
-	for _, req = range s.reqs {
+	for _, req := range s.reqs {
 		_, pending, err := s.el.TransactionByHash(req.TxHash())
 		if err != nil {
-			s.l.Panicf("can't get TX %#x. %v", req.TxHash(), err)
+			s.l.Warnf("can't get TX %#x. %v", req.TxHash(), err)
+			break
 		}
 		if pending {
 			s.l.Debugf("TX %#x is not yet executed", req.TxHash())
@@ -217,7 +219,8 @@ func (s *sender) checkRelayResult(to uint64) {
 		}
 		receipt, err := s.el.TransactionReceipt(req.TxHash())
 		if err != nil {
-			s.l.Panicf("can't get TX receipt for %#x. %v", req.TxHash(), err)
+			s.l.Warnf("can't get TX receipt for %#x. %v", req.TxHash(), err)
+			break
 		}
 		if to < receipt.BlockNumber.Uint64() {
 			s.l.Debugf("%#x is not yet finalized", req.TxHash())
@@ -234,16 +237,20 @@ func (s *sender) checkRelayResult(to uint64) {
 				errCode = client.BMVUnknown
 			}
 		} else {
-			s.l.Debugf("result success %v", req)
+			s.l.Debugf("result success. %v", req)
 		}
 		s.sc <- &types.RelayResult{
 			Id:        req.ID(),
 			Err:       errCode,
 			Finalized: true,
 		}
-		s.removeRequest(req.ID())
+		finished = append(finished, req)
 	}
 	s.mtx.RUnlock()
+
+	for _, req := range finished {
+		s.removeRequest(req.ID())
+	}
 }
 
 func (s *sender) receiptToRevertError(receipt *etypes.Receipt) error {
