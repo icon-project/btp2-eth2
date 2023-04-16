@@ -229,8 +229,7 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 
 func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messageProofData) (link.BlockProof, error) {
 	var path string
-	if SlotToHistoricalRootsIndex(phase0.Slot(bls.Verifier.Height)) ==
-		SlotToHistoricalRootsIndex(phase0.Slot(mp.Slot)) {
+	if bls.Verifier.Height-mp.Slot < SlotPerHistoricalRoot {
 		path = fmt.Sprintf("[\"blockRoots\",%d]", SlotToBlockRootsIndex(phase0.Slot(mp.Slot)))
 	} else {
 		// TODO need verification logic and tests
@@ -353,7 +352,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 					r.l.Panicf("%+v", err)
 				}
 				if bls.RxSeq < status.TxSeq {
-					err = r.handleUndeliveredMessages(bls.Verifier.Height-SlotPerEpoch, int64(slot)-1)
+					err = r.handleUndeliveredMessages(
+						bls.Verifier.Height-SlotPerEpoch, bls.RxSeq+1,
+						int64(slot)-1, status.TxSeq,
+					)
 					if err != nil {
 						r.l.Panicf("failed to add missing message. %+v", err)
 					}
@@ -447,8 +449,8 @@ func (r *receiver) makeBlockUpdateDatas(
 	return bus, nil
 }
 
-func (r *receiver) handleUndeliveredMessages(from, to int64) error {
-	r.l.Debugf("start to find undelivered BTP messages from %d to %d", from, to)
+func (r *receiver) handleUndeliveredMessages(from, fromSeq, to, toSeq int64) error {
+	r.l.Debugf("start to find undelivered BTP messages. from %d(%d) to %d(%d)", from, fromSeq, to, toSeq)
 	for i := from; i <= to; i++ {
 		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(i, 10))
 		if bh == nil || err != nil {
@@ -464,6 +466,9 @@ func (r *receiver) handleUndeliveredMessages(from, to int64) error {
 		r.seq += mp.MessageCount()
 		r.mps = append(r.mps, mp)
 		r.l.Debugf("append undelivered mp: %s", mp)
+		if r.seq >= toSeq {
+			break
+		}
 	}
 	return nil
 }
