@@ -363,6 +363,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			})
 			mp, err := r.makeMessageProofData(update.AttestedHeader)
 			if err != nil {
+				r.l.Warnf("fail to make messageProofData. %+v", err)
 				return
 			}
 			if mp != nil {
@@ -376,7 +377,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			r.l.Debugf("Get light client finality update. slot:%d", slot)
 			bus, err := r.makeBlockUpdateDatas(bls, update)
 			if err != nil {
-				r.l.Debugf("failed to make blockUpdateData. %+v", err)
+				r.l.Warnf("failed to make blockUpdateData. %+v", err)
 				return
 			}
 			lastSeq := r.prevRS.Seq()
