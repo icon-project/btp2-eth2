@@ -18,9 +18,7 @@ package eth2
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"math"
 	"math/big"
 	"strconv"
 	"sync"
@@ -44,6 +42,7 @@ import (
 	"github.com/icon-project/btp2/common/types"
 
 	"github.com/icon-project/btp2-eth2/chain/eth2/client"
+	"github.com/icon-project/btp2-eth2/chain/eth2/proof"
 )
 
 const (
@@ -235,21 +234,21 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 		// TODO need verification logic and tests
 		path = fmt.Sprintf("[\"historicalRoots\",%d]", SlotToHistoricalRootsIndex(phase0.Slot(mp.Slot)))
 	}
-	proof, err := r.cl.GetStateProofWithPath(strconv.FormatInt(bls.Verifier.Height, 10), path)
+	bp, err := r.cl.GetStateProofWithPath(strconv.FormatInt(bls.Verifier.Height, 10), path)
 	if err != nil {
 		return nil, err
 	}
-	bp, err := SingleProofToSSZProof(proof)
+	blockProof, err := proof.NewSingleProof(bp)
 	if err != nil {
 		return nil, err
 	}
 	root, err := mp.Header.Beacon.HashTreeRoot()
-	if bytes.Compare(root[:], bp.Leaf[:]) != 0 {
-		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, bp.Leaf)
+	if bytes.Compare(root[:], blockProof.Leaf()) != 0 {
+		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, blockProof.Leaf())
 	}
 	bpd := &blockProofData{
 		Header: mp.Header,
-		Proof:  bp,
+		Proof:  blockProof.SSZ(),
 	}
 	r.l.Debugf("new BlockProof for slot:%d via %s", bpd.Header.Beacon.Slot, path)
 	return &BlockProof{
@@ -620,11 +619,11 @@ func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error)
 		if err != nil {
 			return nil, err
 		}
-		proof, err := rlp.EncodeToBytes(nodes.NodeList())
+		p, err := rlp.EncodeToBytes(nodes.NodeList())
 		if err != nil {
 			return nil, err
 		}
-		rps = append(rps, &receiptProof{Key: key, Proof: proof})
+		rps = append(rps, &receiptProof{Key: key, Proof: p})
 	}
 	return rps, nil
 }
@@ -635,101 +634,5 @@ func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
 		err = errors.NotFoundError.Wrapf(err, "fail to make receiptsRoot proof")
 		return nil, err
 	}
-	return TreeOffsetProofToSSZProof(rrProof)
-}
-
-func SingleProofToSSZProof(data []byte) (*ssz.Proof, error) {
-	proof := &ssz.Proof{}
-	proofType := int(data[0])
-	if proofType != 0 {
-		return nil, fmt.Errorf("invalid proof type. %d", proofType)
-	}
-	dataOffset := 1
-
-	idx := binary.BigEndian.Uint64(data[dataOffset : dataOffset+8])
-	proof.Index = int(idx)
-	dataOffset += 8
-
-	proof.Leaf = data[dataOffset : dataOffset+32]
-	dataOffset += 32
-
-	leafCount := int(math.Log2(float64(proof.Index)))
-	proof.Hashes = make([][]byte, leafCount, leafCount)
-	for i := 0; i < leafCount; i++ {
-		proof.Hashes[i] = data[dataOffset : dataOffset+32]
-		dataOffset += 32
-	}
-
-	return proof, nil
-}
-
-func TreeOffsetProofToSSZProof(data []byte) (*ssz.Proof, error) {
-	proofType := int(data[0])
-	if proofType != 1 {
-		return nil, fmt.Errorf("invalid proof type. %d", proofType)
-	}
-	dataOffset := 1
-	// leaf count
-	leafCount := int(binary.LittleEndian.Uint16(data[dataOffset : dataOffset+2]))
-	if len(data) < (leafCount-1)*2+leafCount*32 {
-		return nil, fmt.Errorf("unable to deserialize tree offset proof: not enough bytes. %+v", data)
-	}
-	dataOffset += 2
-
-	// offsets
-	offsets := make([]uint16, leafCount-1, leafCount-1)
-	for i := 0; i < leafCount-1; i++ {
-		offsets[i] = binary.LittleEndian.Uint16(data[dataOffset+i*2 : dataOffset+i*2+2])
-	}
-	dataOffset += 2 * (leafCount - 1)
-
-	// leaves
-	leaves := make([][]byte, leafCount, leafCount)
-	for i := 0; i < leafCount; i++ {
-		leaves[i] = data[dataOffset : dataOffset+32]
-		dataOffset += 32
-	}
-
-	node, err := treeOffsetProofToNode(offsets, leaves)
-	if err != nil {
-		return nil, err
-	}
-
-	gIndex := offsetsToGIndex(offsets)
-
-	return node.Prove(gIndex)
-}
-
-func offsetsToGIndex(offsets []uint16) int {
-	base := int(math.Pow(2, float64(len(offsets))))
-	value := 0
-	for _, offset := range offsets {
-		value = value << 1
-		if offset == 1 {
-			value |= 1
-		}
-	}
-	return base + value
-}
-
-// treeOffsetProofToNode Recreate a `Node` given offsets and leaves of a tree-offset proof
-// See https://github.com/protolambda/eth-merkle-trees/blob/master/tree_offsets.md
-func treeOffsetProofToNode(offsets []uint16, leaves [][]byte) (*ssz.Node, error) {
-	if len(leaves) == 0 {
-		return nil, fmt.Errorf("proof must contain gt 0 leaves")
-	} else if len(leaves) == 1 {
-		return ssz.LeafFromBytes(leaves[0]), nil
-	} else {
-		// the offset popped from the list is the # of leaves in the left subtree
-		pivot := offsets[0]
-		left, err := treeOffsetProofToNode(offsets[1:pivot], leaves[0:pivot])
-		if err != nil {
-			return nil, err
-		}
-		right, err := treeOffsetProofToNode(offsets[pivot:], leaves[pivot:])
-		if err != nil {
-			return nil, err
-		}
-		return ssz.NewNodeWithLR(left, right), nil
-	}
+	return proof.TreeOffsetProofToSSZProof(rrProof)
 }
