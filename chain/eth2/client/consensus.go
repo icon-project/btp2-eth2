@@ -67,9 +67,9 @@ func (c *ConsensusLayer) LightClientFinalityUpdate() (*altair.LightClientFinalit
 	return c.service.(*http.Service).LightClientFinalityUpdate(c.ctx)
 }
 
-func (c *ConsensusLayer) GetStateProofWithPath(stateId, path string) ([]byte, error) {
+func (c *ConsensusLayer) GetStateProofWithGIndex(stateId string, gindex uint64) ([]byte, error) {
 	// TODO this api is not public, so do not query via go-eth2-client
-	url := fmt.Sprintf("%s/eth/v0/beacon/icon/proof/state/%s?paths=%s", c.uri, stateId, path)
+	url := fmt.Sprintf("%s/eth/v0/beacon/icon/proof/state/%s?gindex=%d", c.uri, stateId, gindex)
 	resp, err := nhttp.Get(url)
 	if err != nil {
 		return nil, err

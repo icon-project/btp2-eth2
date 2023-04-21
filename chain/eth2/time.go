@@ -10,6 +10,10 @@ const (
 	EpochsPerSyncCommitteePeriod = 256
 	SlotPerSyncCommitteePeriod   = SlotPerEpoch * EpochsPerSyncCommitteePeriod
 	SlotPerHistoricalRoot        = 8192
+
+	ForkEpochCapellaSepolia = 56832
+	ForkEpochCapellaMainnet = 194048
+	ForkEpochCapella        = ForkEpochCapellaSepolia
 )
 
 // SlotToEpoch returns the epoch number of the input slot.
@@ -29,10 +33,10 @@ func IsSyncCommitteeEdge(s phase0.Slot) bool {
 	return (s % SlotPerSyncCommitteePeriod) == 0
 }
 
-func SlotToBlockRootsIndex(s phase0.Slot) int {
-	return int(s % SlotPerHistoricalRoot)
+func SlotToBlockRootsIndex(s phase0.Slot) uint64 {
+	return uint64(s % SlotPerHistoricalRoot)
 }
 
-func SlotToHistoricalRootsIndex(s phase0.Slot) int {
-	return int(s / SlotPerHistoricalRoot)
+func SlotToHistoricalSummariesIndex(s phase0.Slot) uint64 {
+	return uint64(s-ForkEpochCapella*SlotPerEpoch) / SlotPerHistoricalRoot
 }

@@ -227,30 +227,18 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 }
 
 func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messageProofData) (link.BlockProof, error) {
-	var path string
+	var bpd *blockProofData
+	var err error
+
 	if bls.Verifier.Height-mp.Slot < SlotPerHistoricalRoot {
-		path = fmt.Sprintf("[\"blockRoots\",%d]", SlotToBlockRootsIndex(phase0.Slot(mp.Slot)))
+		bpd, err = r.blockProofDataViaBlockRoots(bls, mp)
 	} else {
-		// TODO need verification logic and tests
-		path = fmt.Sprintf("[\"historicalRoots\",%d]", SlotToHistoricalRootsIndex(phase0.Slot(mp.Slot)))
+		bpd, err = r.blockProofDataViaHistoricalSummaries(bls, mp)
 	}
-	bp, err := r.cl.GetStateProofWithPath(strconv.FormatInt(bls.Verifier.Height, 10), path)
 	if err != nil {
 		return nil, err
 	}
-	blockProof, err := proof.NewSingleProof(bp)
-	if err != nil {
-		return nil, err
-	}
-	root, err := mp.Header.Beacon.HashTreeRoot()
-	if bytes.Compare(root[:], blockProof.Leaf()) != 0 {
-		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, blockProof.Leaf())
-	}
-	bpd := &blockProofData{
-		Header: mp.Header,
-		Proof:  blockProof.SSZ(),
-	}
-	r.l.Debugf("new BlockProof for slot:%d via %s", bpd.Header.Beacon.Slot, path)
+	r.l.Debugf("new BlockProof for slot:%d", bpd.Header.Beacon.Slot)
 	return &BlockProof{
 		relayMessageItem: relayMessageItem{
 			it:      link.TypeBlockProof,
@@ -258,6 +246,35 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 		},
 		ph: mp.Slot,
 	}, nil
+}
+
+func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
+	header := mp.Header.Beacon
+	gindex := proof.BlockRootsIdxToGIndex(SlotToBlockRootsIndex(header.Slot))
+	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
+	if err != nil {
+		return nil, err
+	}
+	blockProof, err := proof.NewSingleProof(bp)
+	if err != nil {
+		return nil, err
+	}
+	root, err := header.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Compare(root[:], blockProof.Leaf()) != 0 {
+		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, blockProof.Leaf())
+	}
+	return &blockProofData{
+		Header: mp.Header,
+		Proof:  blockProof.SSZ(),
+	}, nil
+}
+
+func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
+	// TODO implement
+	return nil, nil
 }
 
 func (r *receiver) BuildMessageProof(bls *types.BMCLinkStatus, limit int64) (link.MessageProof, error) {
