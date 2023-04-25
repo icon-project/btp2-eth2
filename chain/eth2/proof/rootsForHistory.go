@@ -16,24 +16,10 @@
 
 package proof
 
-import "math/bits"
-
-const (
-	GIndexStateBlockRoots          = uint64(37)
-	GIndexStateNextSyncCommittee   = uint64(55)
-	GIndexStateFinalizedRoot       = uint64(105)
-	GIndexStateHistoricalSummaries = uint64(118)
-)
-
-func ArrayIdxToGIndex(base, len, idx, elementSize uint64) uint64 {
-	offset := (len + idx) * elementSize
-	return (base-1)<<(63-bits.LeadingZeros64(offset)) + offset
+type RootsForHistory struct {
+	Roots [][]byte `ssz-size:"8192,32"`
 }
 
-func BlockRootsIdxToGIndex(idx uint64) uint64 {
-	return ArrayIdxToGIndex(GIndexStateBlockRoots, 8192, idx, 1)
-}
-
-func HistoricalSummariesIdxToGIndex(idx uint64) uint64 {
-	return ArrayIdxToGIndex(GIndexStateHistoricalSummaries, 1<<24, idx, 2)
+func (r *RootsForHistory) Set(i int, data []byte) {
+	r.Roots[i] = data
 }

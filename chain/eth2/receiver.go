@@ -88,6 +88,7 @@ type receiver struct {
 	rss    []*receiveStatus
 	mps    []*messageProofData
 	fq     *ethereum.FilterQuery
+	ht     map[int64]*ssz.Node
 }
 
 func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]interface{}, l log.Logger) link.Receiver {
@@ -104,6 +105,7 @@ func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 				{crypto.Keccak256Hash([]byte(eventSignature))},
 			},
 		},
+		ht: make(map[int64]*ssz.Node, 0),
 	}
 	r.el, err = client.NewExecutionLayer(endpoint, l)
 	if err != nil {
@@ -273,8 +275,70 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 }
 
 func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
-	// TODO implement
-	return nil, nil
+	header := mp.Header.Beacon
+
+	gindex := proof.HistoricalSummariesIdxToGIndex(SlotToHistoricalSummariesIndex(header.Slot))
+	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
+	if err != nil {
+		return nil, err
+	}
+	blockProof, err := proof.NewSingleProof(bp)
+	if err != nil {
+		return nil, err
+	}
+
+	tr, err := r.getHistoricalSummariesTrie(mp)
+	if err != nil {
+		return nil, err
+	}
+	gindex = proof.ArrayIdxToGIndex(1, SlotPerHistoricalRoot, SlotToBlockRootsIndex(header.Slot), 1)
+	hProof, err := tr.Prove(int(gindex))
+	if err != nil {
+		return nil, err
+	}
+
+	return &blockProofData{
+		Header:          mp.Header,
+		Proof:           blockProof.SSZ(),
+		HistoricalProof: hProof,
+	}, nil
+}
+
+func (r *receiver) getHistoricalSummariesTrie(mp *messageProofData) (*ssz.Node, error) {
+	header := mp.Header.Beacon
+	roots := make([][]byte, SlotPerHistoricalRoot, SlotPerHistoricalRoot)
+	start := int64(HistoricalSummariesStartSlot(header.Slot))
+	if _, ok := r.ht[start]; !ok {
+		var prevRoot []byte
+		for i := int64(1); i < SlotPerHistoricalRoot; i++ {
+			root, err := r.cl.BeaconBlockRoot(strconv.FormatInt(start-i, 10))
+			if root != nil && err == nil {
+				prevRoot = root[:]
+				break
+			}
+		}
+		for i := int64(0); i < SlotPerHistoricalRoot; i++ {
+			root, err := r.cl.BeaconBlockRoot(strconv.FormatInt(start+i, 10))
+			if root == nil || err != nil {
+				if i > 0 {
+					roots[i] = roots[i-1]
+				} else {
+					roots[i] = prevRoot
+				}
+			} else {
+				roots[i] = root[:]
+			}
+		}
+		rfs := &proof.RootsForHistory{
+			Roots: roots,
+		}
+		tr, err := rfs.GetTree()
+		if err != nil {
+			return nil, err
+		}
+		r.ht[start] = tr
+	}
+	return r.ht[start], nil
 }
 
 func (r *receiver) BuildMessageProof(bls *types.BMCLinkStatus, limit int64) (link.MessageProof, error) {
@@ -599,7 +663,7 @@ func (r *receiver) getReceipts(bn *big.Int) ([]*etypes.Receipt, error) {
 // trieFromReceipts make receipt MPT with receipts
 func trieFromReceipts(receipts etypes.Receipts) (*trie.Trie, error) {
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	trie := trie.NewEmpty(db)
+	tr := trie.NewEmpty(db)
 
 	for _, r := range receipts {
 		key, err := rlp.EncodeToBytes(r.TransactionIndex)
@@ -613,9 +677,9 @@ func trieFromReceipts(receipts etypes.Receipts) (*trie.Trie, error) {
 			err = errors.UnknownError.Wrapf(err, "fail to marshal TX receipt %#x", r.TxHash)
 			return nil, err
 		}
-		trie.Update(key, rawReceipt)
+		tr.Update(key, rawReceipt)
 	}
-	return trie, nil
+	return tr, nil
 }
 
 func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error) {

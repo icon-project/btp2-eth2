@@ -240,8 +240,9 @@ func (b *blockUpdateData) RLPDecodeSelf(d codec.Decoder) error {
 }
 
 type blockProofData struct {
-	Header *altair.LightClientHeader
-	Proof  *ssz.Proof // proof for BeaconState.BlockRoots or BeaconState.HistoricalRoots
+	Header          *altair.LightClientHeader
+	Proof           *ssz.Proof
+	HistoricalProof *ssz.Proof
 }
 
 func (b *blockProofData) RLPEncodeSelf(e codec.Encoder) error {
@@ -253,7 +254,7 @@ func (b *blockProofData) RLPEncodeSelf(e codec.Encoder) error {
 	if err != nil {
 		return err
 	}
-	if err = e2.EncodeMulti(h, b.Proof); err != nil {
+	if err = e2.EncodeMulti(h, b.Proof, b.HistoricalProof); err != nil {
 		return err
 	}
 	return nil
@@ -265,7 +266,7 @@ func (b *blockProofData) RLPDecodeSelf(d codec.Decoder) error {
 		return err
 	}
 	var bs []byte
-	if _, err = d2.DecodeMulti(&bs, &b.Proof); err != nil {
+	if _, err = d2.DecodeMulti(&bs, &b.Proof, &b.HistoricalProof); err != nil {
 		return err
 	}
 	b.Header = &altair.LightClientHeader{}

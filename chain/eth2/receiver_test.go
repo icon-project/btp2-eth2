@@ -2,8 +2,8 @@ package eth2
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
-	"math/bits"
 	"strconv"
 	"testing"
 
@@ -58,6 +58,7 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 		},
 	}
 
+	ts := readTestData()
 	for _, tt := range tests {
 		fu, err := r.cl.LightClientFinalityUpdate()
 		assert.NoError(t, err)
@@ -86,10 +87,12 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 				assert.NoError(t, err)
 				verifyBranch(t, 105, leaf[:], bu.FinalizedHeaderBranch, bu.AttestedHeader.Beacon.StateRoot[:])
 				VerifySyncAggregate(t, r, bu)
-
+				bs := codec.RLP.MustMarshalToBytes(bu)
+				ts.BlockUpdate = append(ts.BlockUpdate, hex.EncodeToString(bs))
 			}
 		})
 	}
+	writeTestData(ts)
 }
 
 func verifyBranch(t *testing.T, index int, leaf []byte, hashes [][]byte, root []byte) {
@@ -113,12 +116,6 @@ func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
 	//syncCommittee := lcu[0].NextSyncCommittee
 }
 
-func blockRootsIdxToGIndex(idx int) uint64 {
-	base := uint64(37)
-	offset := uint64(0x2000 + idx)
-	return (base-1)<<(63-bits.LeadingZeros64(offset)) + offset
-}
-
 func TestReceiver_BlockProof(t *testing.T) {
 	r := newReceiver(
 		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
@@ -132,21 +129,28 @@ func TestReceiver_BlockProof(t *testing.T) {
 	}{
 		{
 			name:     "with blockRoots",
-			slotDiff: 5,
+			slotDiff: 11,
 		},
 		{
 			name:     "with blockRoots",
-			slotDiff: 4,
+			slotDiff: 12,
 		},
-		// TODO add
-		//{
-		//	name: "with historicalRoots",
-		//	slotDiff: 10000,
-		//},
+		{
+			name:     "with historicalSummaries",
+			slotDiff: SlotPerHistoricalRoot + 10,
+		},
+		{
+			name:     "with historicalSummaries",
+			slotDiff: SlotPerHistoricalRoot + 11,
+		},
+		{
+			name:     "with historicalSummaries",
+			slotDiff: 2*SlotPerHistoricalRoot + 2,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-%d", tt.name, tt.slotDiff), func(t *testing.T) {
 			// get finalized header and set bls
 			fu, err := r.cl.LightClientFinalityUpdate()
 			assert.NoError(t, err)
@@ -178,14 +182,29 @@ func TestReceiver_BlockProof(t *testing.T) {
 			bpd := new(blockProofData)
 			_, err = codec.RLP.UnmarshalFromBytes(bp.(*BlockProof).Payload(), bpd)
 			assert.NoError(t, err)
-			// bp.proof.leaf == hash_tree_root(bp.header)
-			root, err := bpd.Header.Beacon.HashTreeRoot()
-			assert.NoError(t, err)
-			assert.Equal(t, root[:], bpd.Proof.Leaf)
-			// ssz verify proof
+
+			// ssz verify bp.proof
 			ok, err := ssz.VerifyProof(fu.FinalizedHeader.Beacon.StateRoot[:], bpd.Proof)
 			assert.True(t, ok)
 			assert.NoError(t, err)
+
+			root, err := bpd.Header.Beacon.HashTreeRoot()
+			assert.NoError(t, err)
+			if tt.slotDiff < SlotPerHistoricalRoot {
+				assert.Nil(t, bpd.HistoricalProof)
+
+				// bp.proof.leaf == hash_tree_root(bp.header)
+				assert.NoError(t, err)
+				assert.Equal(t, root[:], bpd.Proof.Leaf)
+			} else {
+				// ssz verify bp.historicalProof
+				ok, err := ssz.VerifyProof(bpd.Proof.Leaf, bpd.HistoricalProof)
+				assert.True(t, ok)
+				assert.NoError(t, err)
+
+				// bp.historicalProof.leaf == hash_tree_root(bp.header)
+				assert.Equal(t, root[:], bpd.HistoricalProof.Leaf)
+			}
 		})
 	}
 }

@@ -97,8 +97,9 @@ func TestMessage_BlockUpdateData(t *testing.T) {
 
 func TestMessage_BlockProofData(t *testing.T) {
 	bp := &blockProofData{
-		Header: lightClientHeader,
-		Proof:  sszProof,
+		Header:          lightClientHeader,
+		Proof:           sszProof,
+		HistoricalProof: sszProof,
 	}
 
 	bs := codec.RLP.MustMarshalToBytes(bp)

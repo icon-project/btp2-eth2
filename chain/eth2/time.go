@@ -40,3 +40,7 @@ func SlotToBlockRootsIndex(s phase0.Slot) uint64 {
 func SlotToHistoricalSummariesIndex(s phase0.Slot) uint64 {
 	return uint64(s-ForkEpochCapella*SlotPerEpoch) / SlotPerHistoricalRoot
 }
+
+func HistoricalSummariesStartSlot(s phase0.Slot) phase0.Slot {
+	return phase0.Slot((ForkEpochCapella * SlotPerEpoch) + SlotToHistoricalSummariesIndex(s)*SlotPerHistoricalRoot)
+}

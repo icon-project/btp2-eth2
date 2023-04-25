@@ -52,3 +52,31 @@ func TestGIndex_HistoricalSummariesIdxToIndex(t *testing.T) {
 		})
 	}
 }
+
+func TestGIndex_ArraryIdxToGIndex(t *testing.T) {
+	tests := []struct {
+		idx  uint64
+		want uint64
+	}{
+		{
+			idx:  0,
+			want: 8192,
+		},
+		{
+			idx:  40,
+			want: 8232,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d", tt.idx), func(t *testing.T) {
+			ret := ArrayIdxToGIndex(
+				1,
+				8192,
+				tt.idx,
+				1,
+			)
+			assert.Equal(t, tt.want, ret)
+		})
+	}
+}
