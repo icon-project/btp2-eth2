@@ -19,6 +19,8 @@ import (
 	"github.com/icon-project/btp2/common/log"
 	"github.com/icon-project/btp2/common/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/icon-project/btp2-eth2/chain/eth2/proof"
 )
 
 func newReceiver(src, dest types.BtpAddress) *receiver {
@@ -76,7 +78,7 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 					leaf, err := bu.NextSyncCommittee.HashTreeRoot()
 					assert.NoError(t, err)
 					verifyBranch(t,
-						55,
+						int(proof.GIndexStateNextSyncCommittee),
 						leaf[:],
 						bu.NextSyncCommitteeBranch,
 						bu.AttestedHeader.Beacon.StateRoot[:],
@@ -85,7 +87,7 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 				// verify finalized header
 				leaf, err := bu.FinalizedHeader.HashTreeRoot()
 				assert.NoError(t, err)
-				verifyBranch(t, 105, leaf[:], bu.FinalizedHeaderBranch, bu.AttestedHeader.Beacon.StateRoot[:])
+				verifyBranch(t, int(proof.GIndexStateFinalizedRoot), leaf[:], bu.FinalizedHeaderBranch, bu.AttestedHeader.Beacon.StateRoot[:])
 				VerifySyncAggregate(t, r, bu)
 				bs := codec.RLP.MustMarshalToBytes(bu)
 				ts.BlockUpdate = append(ts.BlockUpdate, hex.EncodeToString(bs))

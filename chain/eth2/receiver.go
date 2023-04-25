@@ -484,20 +484,15 @@ func (r *receiver) makeBlockUpdateDatas(
 	var nscBranch [][]byte
 	bus := make([]*blockUpdateData, 0)
 	scPeriod := SlotToSyncCommitteePeriod(update.FinalizedHeader.Beacon.Slot)
+	blsSCPeriod := SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))
 
-	if SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))+1 == scPeriod {
-		r.l.Debugf("make NextSyncCommittee %d", scPeriod)
-		lcUpdate, err := r.cl.LightClientUpdates(scPeriod, 1)
+	if scPeriod > blsSCPeriod {
+		lcUpdate, err := r.cl.LightClientUpdates(blsSCPeriod, scPeriod-blsSCPeriod)
 		if err != nil {
 			return nil, err
 		}
-		if len(lcUpdate) != 1 {
-			return nil, fmt.Errorf("invalid light client updates length")
-		}
-		lcu := lcUpdate[0]
-		if !IsSyncCommitteeEdge(update.FinalizedHeader.Beacon.Slot) {
-			// append blockUpdateData made by lightClientUpdate
-			r.l.Debugf("finality update is not Period edge. make blockUpdateData for nextSyncCommittee")
+		for _, lcu := range lcUpdate {
+			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", SlotToSyncCommitteePeriod(lcu.SignatureSlot))
 			bu := &blockUpdateData{
 				AttestedHeader:          lcu.AttestedHeader,
 				FinalizedHeader:         lcu.FinalizedHeader,
@@ -508,10 +503,18 @@ func (r *receiver) makeBlockUpdateDatas(
 				NextSyncCommitteeBranch: lcu.NextSyncCommitteeBranch,
 			}
 			bus = append(bus, bu)
-		} else {
-			nsc = lcu.NextSyncCommittee
-			nscBranch = lcu.NextSyncCommitteeBranch
 		}
+	}
+
+	if IsSyncCommitteeEdge(update.FinalizedHeader.Beacon.Slot) {
+		r.l.Debugf("make NextSyncCommittee for scPeriod=%d", scPeriod)
+		lcUpdate, err := r.cl.LightClientUpdates(scPeriod, 1)
+		if err != nil {
+			return nil, err
+		}
+		lcu := lcUpdate[0]
+		nsc = lcu.NextSyncCommittee
+		nscBranch = lcu.NextSyncCommitteeBranch
 	}
 
 	// append blockUpdateData made by FinalityUpdate
