@@ -69,7 +69,11 @@ func main() {
 			if err != nil {
 				return err
 			}
-			initData, err := getBMVInitialData(url)
+			blockId, err := cmd.Flags().GetString("block-id")
+			if err != nil {
+				return err
+			}
+			initData, err := getBMVInitialData(url, blockId)
 			if err != nil {
 				return err
 			}
@@ -85,6 +89,7 @@ func main() {
 	rootCmd.AddCommand(genCMD)
 	genCMD.Flags().String("url", "http://20.20.5.191:9596", "URL of Beacon node API")
 	genCMD.Flags().String("output", "./bmv_init_data.json", "Output file name")
+	genCMD.Flags().String("block-id", "finalized", "Block ID")
 
 	decCMD := &cobra.Command{
 		Use:   "dec [file]",
@@ -140,7 +145,7 @@ func main() {
 	}
 }
 
-func getBMVInitialData(url string) (*bmvInitData, error) {
+func getBMVInitialData(url, blockId string) (*bmvInitData, error) {
 	l := log.WithFields(log.Fields{})
 	c, err := client.NewConsensusLayer(url, l)
 	if err != nil {
@@ -152,7 +157,7 @@ func getBMVInitialData(url string) (*bmvInitData, error) {
 		return nil, err
 	}
 
-	root, err := c.BeaconBlockRoot("finalized")
+	root, err := c.BeaconBlockRoot(blockId)
 	if err != nil {
 		return nil, err
 	}
