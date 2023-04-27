@@ -123,7 +123,7 @@ var logoLines = []string{
 }
 
 func main() {
-	rootCmd, rootVc := cli.NewCommand(nil, nil, "btp2", "BTP Relay CLI")
+	rootCmd, rootVc := cli.NewCommand(nil, nil, "relay", "BTP Relay CLI")
 	cfg := &Config{}
 	rootCmd.Long = "Command Line Interface of Relay for Blockchain Transmission Protocol"
 	cli.SetEnvKeyReplacer(rootVc, strings.NewReplacer(".", "_"))
