@@ -253,6 +253,7 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
 	header := mp.Header.Beacon
 	gindex := proof.BlockRootsIdxToGIndex(SlotToBlockRootsIndex(header.Slot))
+	r.l.Debugf("make blockProofData with blockRoots. slot:%d, gIndex:%d", header.Slot, gindex)
 	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
 	if err != nil {
 		return nil, err
@@ -276,8 +277,8 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 
 func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
 	header := mp.Header.Beacon
-
 	gindex := proof.HistoricalSummariesIdxToGIndex(SlotToHistoricalSummariesIndex(header.Slot))
+	r.l.Debugf("make blockProofData with historicalSummaries. slot:%d, gIndex:%d", header.Slot, gindex)
 	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
 	if err != nil {
 		return nil, err
@@ -609,22 +610,30 @@ func (r *receiver) getEventLogs(from, to *big.Int) ([]etypes.Log, error) {
 		return nil, err
 	}
 
+	idxToSkip := -1
 	seq := r.seq + 1
 	for i, l := range logs {
 		message, err := r.bmc.ParseMessage(l)
 		if err != nil {
 			return nil, err
 		}
-		if seq != message.Seq.Int64() {
+		if seq < message.Seq.Int64() {
 			// TODO just error?
 			err = errors.IllegalArgumentError.Errorf(
 				"sequence number of BTP message is not continuous (e:%d r:%d)",
 				seq, message.Seq.Int64(),
 			)
 			return nil, err
+		} else if seq > message.Seq.Int64() {
+			r.l.Debugf("skip already relayed message. (i:%d e:%d r:%d)", i, seq, message.Seq.Int64())
+			idxToSkip = i
+		} else {
+			r.l.Debugf("BTP Message#%d[seq:%d] dst:%s", i, message.Seq, r.dst.String())
 		}
-		r.l.Debugf("BTP Message#%d[seq:%d] dst:%s", i, message.Seq, r.dst.String())
 		seq += 1
+	}
+	if idxToSkip > -1 {
+		logs = logs[idxToSkip+1:]
 	}
 	return logs, nil
 }
