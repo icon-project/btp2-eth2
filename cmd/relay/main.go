@@ -48,6 +48,7 @@ const (
 	ICON                = "icon"
 	ETH                 = "eth"
 	HARDHAT             = "hardhat"
+	ETH2                = "eth2"
 )
 
 type Config struct {

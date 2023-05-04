@@ -110,7 +110,7 @@ func newReceiver(s string, cfg chain.Config, l log.Logger) link.Receiver {
 		} else {
 			receiver = btp2.NewBTP2(cfg.Src.Address, cfg.Dst.Address, cfg.Src.Endpoint, l)
 		}
-	case ETH:
+	case ETH2:
 		receiver = eth2.NewReceiver(cfg.Src.Address, cfg.Dst.Address, cfg.Src.Endpoint, cfg.Src.Options, l)
 	case HARDHAT:
 		receiver = ethbr.NewEthBridge(cfg.Src.Address, cfg.Dst.Address, cfg.Src.Endpoint, l)
@@ -128,7 +128,7 @@ func newSender(s string, srcCfg chain.BaseConfig, dstCfg chain.BaseConfig, w wal
 	switch s {
 	case ICON:
 		sender = icon.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, dstCfg.Options, l)
-	case ETH:
+	case ETH2:
 		sender = eth2.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, dstCfg.Options, l)
 	case HARDHAT:
 		sender = ethbr.NewSender(srcCfg.Address, dstCfg.Address, w, dstCfg.Endpoint, nil, l)
