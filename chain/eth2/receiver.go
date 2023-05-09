@@ -52,7 +52,7 @@ const (
 type receiveStatus struct {
 	slot int64 // finalized slot
 	seq  int64 // last sequence number at slot
-	bus  []*blockUpdateData
+	buds []*blockUpdateData
 }
 
 func (r *receiveStatus) Height() int64 {
@@ -204,12 +204,12 @@ func (r *receiver) BuildBlockUpdate(bls *types.BMCLinkStatus, limit int64) ([]li
 	r.clearData(bls)
 	bus := make([]link.BlockUpdate, 0)
 	srcHeight := bls.Verifier.Height
-	for _, rs := range r.rss {
-		r.l.Debugf("Build BlockUpdate for H:%d", rs.Height())
-		for _, blockUpdate := range rs.bus {
-			bu := NewBlockUpdate(srcHeight, blockUpdate)
+	for i, rs := range r.rss {
+		r.l.Debugf("Build BlockUpdate #%d for %+v", i, rs)
+		for _, bud := range rs.buds {
+			bu := NewBlockUpdate(srcHeight, bud)
 			bus = append(bus, bu)
-			srcHeight = int64(blockUpdate.FinalizedHeader.Beacon.Slot)
+			srcHeight = int64(bud.FinalizedHeader.Beacon.Slot)
 		}
 	}
 	return bus, nil
@@ -387,7 +387,7 @@ func (r *receiver) FinalizedStatus(bls <-chan *types.BMCLinkStatus) {
 func (r *receiver) clearData(bls *types.BMCLinkStatus) {
 	for i, rs := range r.rss {
 		if rs.Height() == bls.Verifier.Height && rs.Seq() == bls.RxSeq {
-			r.l.Debugf("remove receiveStatue to %d, %+v", i, rs)
+			r.l.Debugf("remove receiveStatue to %d/%d, %+v", i, len(r.rss), rs)
 			r.rss = r.rss[i+1:]
 			break
 		}
@@ -460,7 +460,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Debugf("skip already processed finality update")
 				return
 			}
-			bus, err := r.makeBlockUpdateDatas(bls, update)
+			buds, err := r.makeBlockUpdateDatas(bls, update)
 			if err != nil {
 				r.l.Warnf("failed to make blockUpdateData. %+v", err)
 				return
@@ -470,7 +470,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			if lmp != nil {
 				lastSeq = lmp.EndSeq
 			}
-			rs := &receiveStatus{seq: lastSeq, slot: slot, bus: bus}
+			rs := &receiveStatus{seq: lastSeq, slot: slot, buds: buds}
 			r.rss = append(r.rss, rs)
 			r.rsc <- rs
 			r.prevRS = rs
@@ -487,7 +487,7 @@ func (r *receiver) makeBlockUpdateDatas(
 ) ([]*blockUpdateData, error) {
 	var nsc *altair.SyncCommittee
 	var nscBranch [][]byte
-	bus := make([]*blockUpdateData, 0)
+	buds := make([]*blockUpdateData, 0)
 	scPeriod := SlotToSyncCommitteePeriod(update.FinalizedHeader.Beacon.Slot)
 	blsSCPeriod := SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))
 
@@ -498,7 +498,7 @@ func (r *receiver) makeBlockUpdateDatas(
 		}
 		for _, lcu := range lcUpdate {
 			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", SlotToSyncCommitteePeriod(lcu.SignatureSlot))
-			bu := &blockUpdateData{
+			bud := &blockUpdateData{
 				AttestedHeader:          lcu.AttestedHeader,
 				FinalizedHeader:         lcu.FinalizedHeader,
 				FinalizedHeaderBranch:   lcu.FinalityBranch,
@@ -507,7 +507,7 @@ func (r *receiver) makeBlockUpdateDatas(
 				NextSyncCommittee:       lcu.NextSyncCommittee,
 				NextSyncCommitteeBranch: lcu.NextSyncCommitteeBranch,
 			}
-			bus = append(bus, bu)
+			buds = append(buds, bud)
 		}
 	}
 
@@ -524,7 +524,7 @@ func (r *receiver) makeBlockUpdateDatas(
 
 	// append blockUpdateData made by FinalityUpdate
 	r.l.Debugf("make blockUpdateData for finality update")
-	bu := &blockUpdateData{
+	bud := &blockUpdateData{
 		AttestedHeader:          update.AttestedHeader,
 		FinalizedHeader:         update.FinalizedHeader,
 		FinalizedHeaderBranch:   update.FinalityBranch,
@@ -533,9 +533,9 @@ func (r *receiver) makeBlockUpdateDatas(
 		NextSyncCommittee:       nsc,
 		NextSyncCommitteeBranch: nscBranch,
 	}
-	bus = append(bus, bu)
+	buds = append(buds, bud)
 
-	return bus, nil
+	return buds, nil
 }
 
 func (r *receiver) handleUndeliveredMessages(from, fromSeq, to, toSeq int64) error {
