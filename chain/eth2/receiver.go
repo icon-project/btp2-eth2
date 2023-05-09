@@ -456,6 +456,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			update := event.Data.(*altair.LightClientFinalityUpdate)
 			slot := int64(update.FinalizedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client finality update. slot:%d", slot)
+			if bls.Verifier.Height >= slot {
+				r.l.Debugf("skip already processed finality update")
+				return
+			}
 			bus, err := r.makeBlockUpdateDatas(bls, update)
 			if err != nil {
 				r.l.Warnf("failed to make blockUpdateData. %+v", err)
