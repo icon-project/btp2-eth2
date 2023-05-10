@@ -227,14 +227,13 @@ func (s *sender) checkRelayResult(to uint64) {
 			break
 		}
 		err = s.receiptToRevertError(receipt)
-		// TODO define errors.Code value for success
-		errCode := errors.Code(-1)
+		errCode := errors.SUCCESS
 		if err != nil {
 			s.l.Debugf("result fail %v. %v", req, err)
 			if ec, ok := errors.CoderOf(err); ok {
 				errCode = ec.ErrorCode()
 			} else {
-				errCode = client.BMVUnknown
+				errCode = errors.BMVUnknown
 			}
 		} else {
 			s.l.Debugf("result success. %v", req)
@@ -265,9 +264,9 @@ func (s *sender) receiptToRevertError(receipt *etypes.Receipt) error {
 			if err != nil {
 				return err
 			}
-			return client.NewRevertError(code)
+			return errors.NewRevertError(code)
 		} else {
-			return client.NewRevertError(int(client.BMVUnknown))
+			return errors.NewRevertError(int(errors.BMVUnknown))
 		}
 	}
 	return nil
