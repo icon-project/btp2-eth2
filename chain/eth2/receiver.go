@@ -564,6 +564,8 @@ func (r *receiver) handleUndeliveredMessages(from, fromSeq, to, toSeq int64) err
 			break
 		}
 	}
+	// clear historicSummaries trie
+	r.ht = make(map[int64]*ssz.Node, 0)
 	return nil
 }
 
