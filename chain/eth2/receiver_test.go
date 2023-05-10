@@ -2,7 +2,6 @@ package eth2
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"testing"
@@ -60,7 +59,6 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 		},
 	}
 
-	ts := readTestData()
 	for _, tt := range tests {
 		fu, err := r.cl.LightClientFinalityUpdate()
 		assert.NoError(t, err)
@@ -89,12 +87,9 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 				assert.NoError(t, err)
 				verifyBranch(t, int(proof.GIndexStateFinalizedRoot), leaf[:], bu.FinalizedHeaderBranch, bu.AttestedHeader.Beacon.StateRoot[:])
 				VerifySyncAggregate(t, r, bu)
-				bs := codec.RLP.MustMarshalToBytes(bu)
-				ts.BlockUpdate = append(ts.BlockUpdate, hex.EncodeToString(bs))
 			}
 		})
 	}
-	writeTestData(ts)
 }
 
 func verifyBranch(t *testing.T, index int, leaf []byte, hashes [][]byte, root []byte) {
