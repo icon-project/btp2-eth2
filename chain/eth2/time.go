@@ -33,6 +33,10 @@ func IsSyncCommitteeEdge(s phase0.Slot) bool {
 	return (s % SlotPerSyncCommitteePeriod) == 0
 }
 
+func IsCheckPoint(s phase0.Slot) bool {
+	return (s % SlotPerEpoch) == 0
+}
+
 func SlotToBlockRootsIndex(s phase0.Slot) uint64 {
 	return uint64(s % SlotPerHistoricalRoot)
 }

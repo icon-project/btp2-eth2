@@ -306,10 +306,6 @@ func (m *messageProofData) Contains(seq int64) bool {
 	return m.StartSeq <= seq && seq <= m.EndSeq
 }
 
-func (m *messageProofData) MessageCount() int64 {
-	return m.EndSeq - m.StartSeq + 1
-}
-
 func (m *messageProofData) RLPEncodeSelf(e codec.Encoder) error {
 	e2, err := e.EncodeList()
 	if err != nil {

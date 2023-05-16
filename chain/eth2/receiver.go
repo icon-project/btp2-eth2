@@ -19,6 +19,7 @@ package eth2
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"sync"
@@ -89,6 +90,7 @@ type receiver struct {
 	mps    []*messageProofData
 	fq     *ethereum.FilterQuery
 	ht     map[int64]*ssz.Node
+	cp     map[int64]*phase0.BeaconBlockHeader // save checkpoint to validate gathered mps
 }
 
 func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]interface{}, l log.Logger) link.Receiver {
@@ -106,6 +108,7 @@ func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 			},
 		},
 		ht: make(map[int64]*ssz.Node, 0),
+		cp: make(map[int64]*phase0.BeaconBlockHeader, 0),
 	}
 	r.el, err = client.NewExecutionLayer(endpoint, l)
 	if err != nil {
@@ -429,7 +432,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
 		if event.Topic == client.TopicLCOptimisticUpdate {
 			update := event.Data.(*altair.LightClientOptimisticUpdate)
-			slot := update.AttestedHeader.Beacon.Slot
+			slot := int64(update.AttestedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client optimistic update. slot:%d", slot)
 			once.Do(func() {
 				r.l.Debugf("Check undelivered messages")
@@ -437,14 +440,16 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				if err != nil {
 					r.l.Panicf("%+v", err)
 				}
+				// handle undelivered messages
 				if bls.RxSeq < status.TxSeq {
-					err = r.handleUndeliveredMessages(
+					mps, err := r.makeMessageProofDataByRange(
 						bls.Verifier.Height-SlotPerEpoch, bls.RxSeq+1,
-						int64(slot)-1, status.TxSeq,
+						slot-1, status.TxSeq,
 					)
 					if err != nil {
 						r.l.Panicf("failed to add missing message. %+v", err)
 					}
+					r.l.Debugf("append %d messageProofDatas by range", len(mps))
 				}
 			})
 			mp, err := r.makeMessageProofData(update.AttestedHeader)
@@ -453,9 +458,12 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				return
 			}
 			if mp != nil {
-				r.seq += mp.MessageCount()
+				r.seq = mp.EndSeq
 				r.mps = append(r.mps, mp)
 				r.l.Debugf("append new mp: %s", mp)
+			}
+			if IsCheckPoint(update.AttestedHeader.Beacon.Slot) {
+				r.cp[slot] = update.AttestedHeader.Beacon
 			}
 		} else if event.Topic == client.TopicLCFinalityUpdate {
 			update := event.Data.(*altair.LightClientFinalityUpdate)
@@ -476,6 +484,11 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				lastSeq = lmp.EndSeq
 			}
 			rs := &receiveStatus{seq: lastSeq, slot: slot, buds: buds}
+			err = r.validateMessageProofData(update)
+			if err != nil {
+				r.l.Warnf("failed to validate messageProofData. %+v", err)
+				return
+			}
 			r.rss = append(r.rss, rs)
 			r.rsc <- rs
 			r.prevRS = rs
@@ -543,30 +556,41 @@ func (r *receiver) makeBlockUpdateDatas(
 	return buds, nil
 }
 
-func (r *receiver) handleUndeliveredMessages(from, fromSeq, to, toSeq int64) error {
-	r.l.Debugf("start to find undelivered BTP messages. from %d(%d) to %d(%d)", from, fromSeq, to, toSeq)
+func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) ([]*messageProofData, error) {
+	r.l.Debugf("start to find BTP messages. from %d(%d) to %d(%d)", from, fromSeq, to, toSeq)
+	mps := make([]*messageProofData, 0)
 	for i := from; i <= to; i++ {
 		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(i, 10))
 		if bh == nil || err != nil {
 			continue
 		}
+		if IsCheckPoint(bh.Header.Message.Slot) {
+			r.cp[int64(bh.Header.Message.Slot)] = bh.Header.Message
+		}
 		mp, err := r.makeMessageProofData(&altair.LightClientHeader{Beacon: bh.Header.Message})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if mp == nil {
 			continue
 		}
-		r.seq += mp.MessageCount()
+		mps = append(mps, mp)
+		r.seq = mp.EndSeq
 		r.mps = append(r.mps, mp)
-		r.l.Debugf("append undelivered mp: %s", mp)
-		if r.seq >= toSeq {
+		r.l.Debugf("make mp by range: %s", mp)
+
+		if mp.EndSeq >= toSeq {
+			for start := int64(SlotToEpoch(phase0.Slot(i))+1) * SlotPerEpoch; start <= to; start += SlotPerEpoch {
+				bh, err = r.cl.BeaconBlockHeader(strconv.FormatInt(start, 10))
+				if bh == nil || err != nil {
+					continue
+				}
+				r.cp[int64(bh.Header.Message.Slot)] = bh.Header.Message
+			}
 			break
 		}
 	}
-	// clear historicSummaries trie
-	r.ht = make(map[int64]*ssz.Node, 0)
-	return nil
+	return mps, nil
 }
 
 func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *messageProofData, err error) {
@@ -739,4 +763,38 @@ func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
 		return nil, err
 	}
 	return proof.TreeOffsetProofToSSZProof(rrProof)
+}
+
+func (r *receiver) validateMessageProofData(update *altair.LightClientFinalityUpdate) error {
+	slot := int64(update.FinalizedHeader.Beacon.Slot)
+	invalid := false
+	r.l.Debugf("validate messageProofDatas at %d.", slot)
+	if cp, ok := r.cp[slot]; ok {
+		invalid = cp.String() != update.FinalizedHeader.Beacon.String()
+		delete(r.cp, slot)
+	} else {
+		invalid = true
+	}
+
+	// rebuild message proof data
+	if invalid {
+		r.l.Debugf("invalid messageProofDatas at %d. reset messageProofDatas", slot)
+		r.mps = make([]*messageProofData, 0)
+		r.seq = r.prevRS.Seq()
+
+		mps, err := r.makeMessageProofDataByRange(
+			r.prevRS.Height()+1, r.prevRS.Seq(),
+			int64(update.AttestedHeader.Beacon.Slot), math.MaxInt64,
+		)
+		if err != nil {
+			return err
+		}
+		if len(mps) > 0 {
+			r.l.Debugf("append %d messageProofDatas by range", len(mps))
+		}
+	} else {
+		r.l.Debugf("valid messageProofDatas at %d.", slot)
+	}
+
+	return nil
 }
