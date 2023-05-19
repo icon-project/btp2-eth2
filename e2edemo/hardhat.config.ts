@@ -17,6 +17,12 @@ const config: HardhatUserConfig = {
       },
     },
   },
+  networks: {
+    sepolia: {
+      url: `http://execution-endpoint:8545`,
+      accounts: ["your private key"]
+    },
+  },
 };
 
 export default config;

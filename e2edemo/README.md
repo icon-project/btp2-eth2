@@ -28,6 +28,18 @@ npm install
 
 A new directory named `node_modules` is created in the current working directory.
 
+## Configurations for Ethereum 2.0
+`e2edemo` use Ethereum 2.0 test network `sepolia`. Need to modify configurations for test.
+
+### Account
+Prepare an account with enough balance in `sepolia`. Copy `keystore.json` and `keysecret` files to `./docker/eth2`
+
+### chain_config.json
+Update `chains.sepolia.endpoint` and `chains.sepolia.options` in `./chain_config.json`
+
+### hardhat.config.ts
+Update `networks.sepolia` in `./hardhat.config.ts`
+
 ## Setup ICON node
 
 This is also a one-time setup procedure unless you delete the ICON node data directory (`./docker/icon/data`)

@@ -17,10 +17,17 @@
       "endpoint": "http://localhost:8545",
       "keystore": "./docker/hardhat/keystore0.json",
       "keypass": "hardhat"
+    },
+    "sepolia": {
+      "network": "0xaa36a7.eth2",
+      "endpoint": "http://execution-endpoint:8545",
+      "options": "consensus_endpoint=http://consensus-endpoint:9596",
+      "keystore": "./docker/eth2/keystore.json",
+      "keysecret": "./docker/eth2/keysecret"
     }
   },
   "link": {
     "src": "icon0",
-    "dst": "hardhat"
+    "dst": "sepolia"
   }
 }
