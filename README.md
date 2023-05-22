@@ -19,3 +19,6 @@ This is a `relay` implementation for BTP 2.0 protocol.
 ## References
 * [ICON BTP Standard](https://github.com/icon-project/IIPs/blob/master/IIPS/iip-25.md)
 * [Relay System for BTP 2.0](https://github.com/icon-project/btp2)
+
+## License
+This project is available under the [Apache License, Version 2.0](LICENSE).
