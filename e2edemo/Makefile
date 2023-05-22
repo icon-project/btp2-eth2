@@ -5,7 +5,7 @@ GRADLE = ./gradlew
 
 HARDHAT = npx hardhat
 TS_NODE = npx ts-node
-NETWORK = --network localhost
+NETWORK = --network sepolia
 SOLIDITY_CONTRACTS = ./solidity/contracts
 
 .DEFAULT_GOAL := all
@@ -43,7 +43,7 @@ build-bmv-java:
 	@ echo ">>> Build BMV javascore" ; \
 	cd $(JAVASCORE_PATH) ; \
 	$(GRADLE) bmv:bridge:optimizedJar \
-		bmv:btpblock:optimizedJar
+		bmv:eth2:optimizedJar
 
 build-xcall-java:
 	@ echo ">>> Build xCall javascore" ; \
@@ -79,10 +79,16 @@ deploy-dapp:
 
 deploy-all: deploy-bmc deploy-bmv deploy-xcall deploy-dapp
 
+bmv-init:
+	@ echo ">>> Generate initial data of Java BMV for Ethereum 2.0" ; \
+	cd ..; \
+	make bmvinit; \
+	./bin/bmvinit gen --url http://18.176.88.124:9596 --output $(PWD)/java_bmv_init_data.json
+
 start-nodes:
 	@ echo ">>> Start nodes" ; \
 	cd docker; \
-	docker compose up -d
+	docker compose up -d icon-node
 
 stop-nodes:
 	@ echo ">>> Stop nodes" ; \

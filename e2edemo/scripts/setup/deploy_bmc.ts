@@ -95,6 +95,7 @@ async function main() {
       await deploy_java(link.dst, dstChain);
       break;
     case 'hardhat':
+    case 'eth2':
       await deploy_solidity(link.dst, dstChain);
       break;
     default:

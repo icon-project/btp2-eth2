@@ -1,10 +1,13 @@
+import fs from 'fs';
 import {ethers} from 'hardhat';
 import IconService from "icon-sdk-js";
 import {Contract, IconNetwork, Jar} from "../icon";
 import {Gov, BMC, BMV, getBtpAddress} from "../icon";
 import {Deployments, chainType} from "./config";
+
 const {IconConverter} = IconService;
-const {JAVASCORE_PATH, BMV_BRIDGE} = process.env
+const {PWD, JAVASCORE_PATH, BMV_BRIDGE} = process.env
+const ETH2_BMV_INIT_PATH= `${PWD}/java_bmv_init_data.json`
 
 const bridgeMode = BMV_BRIDGE == "true";
 const deployments = Deployments.getDefault();
@@ -95,9 +98,34 @@ async function deploy_bmv_bridge_java(srcNetwork: IconNetwork, srcChain: any, ds
   console.log(`${srcChain.network}: BMV-Bridge: deployed to ${bmv.address}`);
 }
 
+async function deploy_bmv_eth2_java(srcNetwork: IconNetwork, srcChain: any, dstChain: any) {
+  const bmvInitData = JSON.parse(fs.readFileSync(ETH2_BMV_INIT_PATH).toString());
+  console.log(`java bmv init conf path ${ETH2_BMV_INIT_PATH}. ${bmvInitData}`);
+  const content = Jar.readFromFile(JAVASCORE_PATH, "bmv/eth2", "0.2.0");
+  const bmv = new Contract(srcNetwork)
+  const deployTxHash = await bmv.deploy({
+    content: content,
+    params: {
+      srcNetworkID: dstChain.network,
+      genesisValidatorsHash: bmvInitData.genesis_validators_hash,
+      syncCommittee: bmvInitData.sync_committee,
+      bmc: srcChain.contracts.bmc,
+      ethBmc: dstChain.contracts.bmc,
+      finalizedHeader: bmvInitData.finalized_header,
+    }
+  })
+  const result = await bmv.getTxResult(deployTxHash);
+  if (result.status != 1) {
+    throw new Error(`BMV deployment failed: ${result.txHash}`);
+  }
+  srcChain.contracts.bmv = bmv.address;
+  console.log(`${srcChain.network}: BMV-eth2: deployed to ${bmv.address}`);
+}
+
 async function deploy_bmv(src: string, dst: string, srcChain: any, dstChain: any) {
   const srcNetwork = IconNetwork.getNetwork(src);
-  switch (chainType(dstChain)) {
+  const dstChainType = chainType(dstChain);
+  switch (dstChainType) {
     case 'icon':
       const dstNetwork = IconNetwork.getNetwork(dst);
       // deploy BMV-BTPBlock for src network
@@ -107,6 +135,7 @@ async function deploy_bmv(src: string, dst: string, srcChain: any, dstChain: any
       break;
 
     case 'hardhat':
+    case 'eth2':
       const lastBlock = await srcNetwork.getLastBlock();
       srcChain.blockNum = lastBlock.height
       console.log(`${src}: block number (${srcChain.network}): ${srcChain.blockNum}`);
@@ -115,8 +144,12 @@ async function deploy_bmv(src: string, dst: string, srcChain: any, dstChain: any
       dstChain.blockNum = blockNum
       console.log(`${dst}: block number (${dstChain.network}): ${dstChain.blockNum}`);
 
-      // deploy BMV-Bridge java for src network
-      await deploy_bmv_bridge_java(srcNetwork, srcChain, dstChain);
+      if (dstChainType == 'hardhat') {
+        // deploy BMV-Bridge java for src network
+        await deploy_bmv_bridge_java(srcNetwork, srcChain, dstChain);
+      } else {
+        await deploy_bmv_eth2_java(srcNetwork, srcChain, dstChain);
+      }
 
       if (bridgeMode) {
         // deploy BMV-Bridge solidity for dst network
@@ -137,7 +170,7 @@ async function deploy_bmv(src: string, dst: string, srcChain: any, dstChain: any
       break;
 
     default:
-      throw new Error(`Unknown chain type: ${chainType(dstChain)}`);
+      throw new Error(`Unknown chain type: ${dstChainType}`);
   }
 
   // update deployments
@@ -146,7 +179,7 @@ async function deploy_bmv(src: string, dst: string, srcChain: any, dstChain: any
   deployments.save();
 }
 
-async function setup_link_icon(src: string, srcChain:any, dstChain: any) {
+async function setup_link_icon(src: string, srcChain: any, dstChain: any) {
   const srcNetwork = IconNetwork.getNetwork(src);
   const bmc = new BMC(srcNetwork, srcChain.contracts.bmc);
   const dstBmcAddr = getBtpAddress(dstChain.network, dstChain.contracts.bmc);
@@ -177,7 +210,7 @@ async function setup_link_icon(src: string, srcChain:any, dstChain: any) {
     })
 }
 
-async function setup_link_hardhat(src: string, srcChain: any, dstChain: any) {
+async function setup_link_solidity(src: string, srcChain: any, dstChain: any) {
   const bmcm = await ethers.getContractAt('BMCManagement', srcChain.contracts.bmcm)
   const dstBmcAddr = getBtpAddress(dstChain.network, dstChain.contracts.bmc);
 
@@ -215,7 +248,8 @@ async function setup_link(src: string, dst: string, srcChain: any, dstChain: any
       await setup_link_icon(dst, dstChain, srcChain);
       break;
     case 'hardhat':
-      await setup_link_hardhat(dst, dstChain, srcChain);
+    case 'eth2':
+      await setup_link_solidity(dst, dstChain, srcChain);
       break;
     default:
       throw new Error(`Unknown chain type: ${chainType(dstChain)}`);

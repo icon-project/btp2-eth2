@@ -47,6 +47,7 @@ async function main() {
       await deploy_dapp_java(dst, dstChain);
       break;
     case 'hardhat':
+    case 'eth2':
       await deploy_dapp_solidity(dst, dstChain);
       break;
     default:

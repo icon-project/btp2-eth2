@@ -61,6 +61,7 @@ async function main() {
       await deploy_xcall_java(dst, dstChain);
       break;
     case 'hardhat':
+    case 'eth2':
       await deploy_xcall_solidity(dst, dstChain);
       break;
     default:

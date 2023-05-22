@@ -26,6 +26,7 @@ if [ ${SRC_KEY_SECRET} != null ]; then
 else
   SRC_KEY_PASSWORD=$(cat ${CHAIN_CONFIG} | jq -r .chains.${SRC}.keypass)
 fi
+SRC_OPTIONS=$(cat ${CHAIN_CONFIG} | jq -r '.chains.'${SRC}'.options // empty')
 
 # DST network config
 DST_ADDRESS=btp://${DST_NETWORK}/${DST_BMC_ADDRESS}
@@ -37,6 +38,7 @@ if [ ${DST_KEY_SECRET} != null ]; then
 else
   DST_KEY_PASSWORD=$(cat ${CHAIN_CONFIG} | jq -r .chains.${DST}.keypass)
 fi
+DST_OPTIONS=$(cat ${CHAIN_CONFIG} | jq -r '.chains.'${DST}'.options // empty')
 
 if [ "x$BMV_BRIDGE" = xtrue ]; then
   echo "Using Bridge mode"
@@ -52,8 +54,10 @@ ${RELAY_BIN} \
     --src.key_store ${SRC_KEY_STORE} \
     --src.key_password ${SRC_KEY_PASSWORD} \
     --src.bridge_mode=${BMV_BRIDGE} \
+    ${SRC_OPTIONS:+--dst.options $SRC_OPTIONS} \
     --dst.address ${DST_ADDRESS} \
     --dst.endpoint ${DST_ENDPOINT} \
     --dst.key_store ${DST_KEY_STORE} \
     --dst.key_password ${DST_KEY_PASSWORD} \
+    ${DST_OPTIONS:+--dst.options $DST_OPTIONS} \
     start
