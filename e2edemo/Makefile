@@ -62,7 +62,7 @@ deploy-bmc:
 	JAVASCORE_PATH=$(JAVASCORE_PATH) \
 	$(HARDHAT) $(NETWORK) run scripts/setup/deploy_bmc.ts
 
-deploy-bmv:
+deploy-bmv: bmv-init
 	@ echo ">>> Deploy BMV contracts" ; \
 	JAVASCORE_PATH=$(JAVASCORE_PATH) \
 	$(HARDHAT) $(NETWORK) run scripts/setup/deploy_bmv.ts
