@@ -37,6 +37,7 @@ var (
 )
 
 type bmvInitData struct {
+	Slot                  int64  `json:"slot"`
 	GenesisValidatorsHash string `json:"genesis_validators_hash"`
 	SyncCommittee         string `json:"sync_committee"`
 	FinalizedHeader       string `json:"finalized_header"`
@@ -179,6 +180,7 @@ func getBMVInitialData(url, blockId string) (*bmvInitData, error) {
 	}
 
 	data := &bmvInitData{
+		Slot:                  int64(bootStrap.Header.Beacon.Slot),
 		GenesisValidatorsHash: genesis.GenesisValidatorsRoot.String(),
 		SyncCommittee:         "0x" + hex.EncodeToString(syncCommittee),
 		FinalizedHeader:       "0x" + hex.EncodeToString(finalizedHeader),
