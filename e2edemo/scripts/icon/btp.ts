@@ -6,6 +6,15 @@ export class BMC extends Contract {
     super(_iconNetwork, _address)
   }
 
+  getStatus(link: string) {
+    return this.call({
+      method: 'getStatus',
+      params: {
+        _link: link
+      }
+    })
+  }
+
   getBtpAddress() {
     return this.call({
       method: 'getBtpAddress'
@@ -18,6 +27,15 @@ export class BMC extends Contract {
       params: {
         _net: network,
         _addr: address
+      }
+    })
+  }
+
+  removeVerifier(network: string) {
+    return this.invoke({
+      method: 'removeVerifier',
+      params: {
+        _net: network
       }
     })
   }

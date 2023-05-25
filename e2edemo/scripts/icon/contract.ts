@@ -62,18 +62,19 @@ export class Contract {
     return this.iconService.sendTransaction(signedTx).execute();
   }
 
-  deploy({content, params}: {
+  deploy({content, params, to}: {
     content: string;
     params?: {
       [key: string]: any;
     };
+    to?: string;
   }) {
     const payload = new IconBuilder.DeployTransactionBuilder()
       .contentType('application/java')
       .content(`0x${content}`)
       .params(params)
       .from(this.wallet.getAddress())
-      .to('cx0000000000000000000000000000000000000000')
+      .to(to === undefined ? 'cx0000000000000000000000000000000000000000': to)
       .nid(this.nid)
       .version(3)
       .timestamp((new Date()).getTime() * 1000)

@@ -79,6 +79,12 @@ deploy-dapp:
 
 deploy-all: deploy-bmc deploy-bmv deploy-xcall deploy-dapp
 
+update-bmv: bmv-init
+	@ echo ">>> Update ICON java BMV contract" ; \
+	E2E_DEMO_PATH=$(PWD) \
+	JAVASCORE_PATH=$(JAVASCORE_PATH) \
+	$(HARDHAT) $(NETWORK) run scripts/setup/update_bmv.ts
+
 bmv-init:
 	@ echo ">>> Generate initial data of Java BMV for Ethereum 2.0" ; \
 	cd ..; \
