@@ -451,6 +451,11 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 					}
 					r.l.Debugf("append %d messageProofDatas by range", len(mps))
 				}
+				fu, err := r.cl.LightClientFinalityUpdate()
+				if err != nil {
+					r.l.Panicf("failed to get Finality Update. %+v", err)
+				}
+				r.addCheckPointsByRange(int64(fu.FinalizedHeader.Beacon.Slot), slot-1)
 			})
 			mp, err := r.makeMessageProofData(update.AttestedHeader)
 			if err != nil {
@@ -462,9 +467,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.mps = append(r.mps, mp)
 				r.l.Debugf("append new mp: %s", mp)
 			}
-			if IsCheckPoint(update.AttestedHeader.Beacon.Slot) {
-				r.cp[slot] = update.AttestedHeader.Beacon
-			}
+			r.addCheckPoint(update.AttestedHeader.Beacon)
 		} else if event.Topic == client.TopicLCFinalityUpdate {
 			update := event.Data.(*altair.LightClientFinalityUpdate)
 			slot := int64(update.FinalizedHeader.Beacon.Slot)
@@ -478,13 +481,13 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Warnf("failed to make blockUpdateData. %+v", err)
 				return
 			}
+			err = r.validateMessageProofData(update)
 			lastSeq := r.prevRS.Seq()
 			lmp := r.GetLastMessageProofDataForHeight(slot)
 			if lmp != nil {
 				lastSeq = lmp.EndSeq
 			}
 			rs := &receiveStatus{seq: lastSeq, slot: slot, buds: buds}
-			err = r.validateMessageProofData(update)
 			if err != nil {
 				r.l.Warnf("failed to validate messageProofData. %+v", err)
 				return
@@ -564,9 +567,6 @@ func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) (
 		if bh == nil || err != nil {
 			continue
 		}
-		if IsCheckPoint(bh.Header.Message.Slot) {
-			r.cp[int64(bh.Header.Message.Slot)] = bh.Header.Message
-		}
 		mp, err := r.makeMessageProofData(&altair.LightClientHeader{Beacon: bh.Header.Message})
 		if err != nil {
 			return nil, err
@@ -580,13 +580,6 @@ func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) (
 		r.l.Debugf("make mp by range: %s", mp)
 
 		if mp.EndSeq >= toSeq {
-			for start := int64(SlotToEpoch(phase0.Slot(i))+1) * SlotPerEpoch; start <= to; start += SlotPerEpoch {
-				bh, err = r.cl.BeaconBlockHeader(strconv.FormatInt(start, 10))
-				if bh == nil || err != nil {
-					continue
-				}
-				r.cp[int64(bh.Header.Message.Slot)] = bh.Header.Message
-			}
 			break
 		}
 	}
@@ -632,7 +625,6 @@ func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *m
 		StartSeq:          bms.Seq.Int64(),
 		EndSeq:            bme.Seq.Int64(),
 	}
-
 	return
 }
 
@@ -765,35 +757,52 @@ func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
 	return proof.TreeOffsetProofToSSZProof(rrProof)
 }
 
+func (r *receiver) addCheckPoint(bh *phase0.BeaconBlockHeader) {
+	if IsCheckPoint(bh.Slot) {
+		r.l.Debugf("add checkpoint at %d", bh.Slot)
+		r.cp[int64(bh.Slot)] = bh
+	}
+}
+
+func (r *receiver) addCheckPointsByRange(from, to int64) {
+	for start := int64(SlotToEpoch(phase0.Slot(from))+1) * SlotPerEpoch; start <= to; start += SlotPerEpoch {
+		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(start, 10))
+		if bh == nil || err != nil {
+			continue
+		}
+		r.addCheckPoint(bh.Header.Message)
+	}
+}
+
 func (r *receiver) validateMessageProofData(update *altair.LightClientFinalityUpdate) error {
-	slot := int64(update.FinalizedHeader.Beacon.Slot)
+	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
 	invalid := false
-	r.l.Debugf("validate messageProofDatas at %d.", slot)
-	if cp, ok := r.cp[slot]; ok {
+	r.l.Debugf("validate messageProofDatas at %d.", fSlot)
+	if cp, ok := r.cp[fSlot]; ok {
 		invalid = cp.String() != update.FinalizedHeader.Beacon.String()
-		delete(r.cp, slot)
+		delete(r.cp, fSlot)
 	} else {
 		invalid = true
 	}
 
-	// rebuild message proof data
+	// rebuild message proof data and checkpoint
 	if invalid {
-		r.l.Debugf("invalid messageProofDatas at %d. reset messageProofDatas", slot)
+		r.l.Debugf("invalid messageProofDatas at %d. reset messageProofDatas", fSlot)
 		r.mps = make([]*messageProofData, 0)
+		r.cp = make(map[int64]*phase0.BeaconBlockHeader, 0)
 		r.seq = r.prevRS.Seq()
+		aSlot := int64(update.AttestedHeader.Beacon.Slot)
 
 		mps, err := r.makeMessageProofDataByRange(
-			r.prevRS.Height()+1, r.prevRS.Seq(),
-			int64(update.AttestedHeader.Beacon.Slot), math.MaxInt64,
+			r.prevRS.Height()+1, r.prevRS.Seq(), aSlot, math.MaxInt64,
 		)
 		if err != nil {
 			return err
 		}
+		r.addCheckPointsByRange(fSlot, aSlot)
 		if len(mps) > 0 {
 			r.l.Debugf("append %d messageProofDatas by range", len(mps))
 		}
-	} else {
-		r.l.Debugf("valid messageProofDatas at %d.", slot)
 	}
 
 	return nil
