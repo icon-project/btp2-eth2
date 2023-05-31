@@ -20,12 +20,13 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
+	"github.com/icon-project/btp2/common"
 	"github.com/icon-project/btp2/common/codec"
 	"github.com/icon-project/btp2/common/link"
 	"github.com/icon-project/btp2/common/types"
+
+	"github.com/icon-project/btp2-eth2/chain/eth2/client/lightclient"
 )
 
 type BTPRelayMessage struct {
@@ -164,13 +165,13 @@ func NewTypePrefixedMessage(rmi link.RelayMessageItem) (*TypePrefixedMessage, er
 }
 
 type blockUpdateData struct {
-	AttestedHeader          *altair.LightClientHeader
-	FinalizedHeader         *altair.LightClientHeader
-	FinalizedHeaderBranch   [][]byte
-	SyncAggregate           *altair.SyncAggregate
-	SignatureSlot           phase0.Slot
-	NextSyncCommittee       *altair.SyncCommittee
-	NextSyncCommitteeBranch [][]byte
+	AttestedHeader          *lightclient.LightClientHeader
+	FinalizedHeader         *lightclient.LightClientHeader
+	FinalizedHeaderBranch   []common.HexBytes
+	SyncAggregate           *lightclient.SyncAggregate
+	SignatureSlot           lightclient.Slot
+	NextSyncCommittee       *lightclient.SyncCommittee
+	NextSyncCommitteeBranch []common.HexBytes
 }
 
 func (b *blockUpdateData) RLPEncodeSelf(e codec.Encoder) error {
@@ -216,22 +217,22 @@ func (b *blockUpdateData) RLPDecodeSelf(d codec.Decoder) error {
 	); err != nil {
 		return err
 	}
-	b.AttestedHeader = new(altair.LightClientHeader)
+	b.AttestedHeader = new(lightclient.LightClientHeader)
 	err = b.AttestedHeader.UnmarshalSSZ(ah)
 	if err != nil {
 		return err
 	}
-	b.FinalizedHeader = new(altair.LightClientHeader)
+	b.FinalizedHeader = new(lightclient.LightClientHeader)
 	err = b.FinalizedHeader.UnmarshalSSZ(fh)
 	if err != nil {
 		return err
 	}
-	b.SyncAggregate = new(altair.SyncAggregate)
+	b.SyncAggregate = new(lightclient.SyncAggregate)
 	err = b.SyncAggregate.UnmarshalSSZ(sa)
 	if err != nil {
 		return err
 	}
-	b.NextSyncCommittee = new(altair.SyncCommittee)
+	b.NextSyncCommittee = new(lightclient.SyncCommittee)
 	err = b.NextSyncCommittee.UnmarshalSSZ(nsc)
 	if err != nil {
 		return err
@@ -240,7 +241,7 @@ func (b *blockUpdateData) RLPDecodeSelf(d codec.Decoder) error {
 }
 
 type blockProofData struct {
-	Header          *altair.LightClientHeader
+	Header          *lightclient.LightClientHeader
 	Proof           *ssz.Proof
 	HistoricalProof *ssz.Proof
 }
@@ -269,7 +270,7 @@ func (b *blockProofData) RLPDecodeSelf(d codec.Decoder) error {
 	if _, err = d2.DecodeMulti(&bs, &b.Proof, &b.HistoricalProof); err != nil {
 		return err
 	}
-	b.Header = &altair.LightClientHeader{}
+	b.Header = &lightclient.LightClientHeader{}
 	err = b.Header.UnmarshalSSZ(bs)
 	if err != nil {
 		return err
@@ -293,7 +294,7 @@ type messageProofData struct {
 	ReceiptsRootProof *ssz.Proof
 	ReceiptProofs     []*receiptProof
 
-	Header   *altair.LightClientHeader
+	Header   *lightclient.LightClientHeader
 	StartSeq int64
 	EndSeq   int64
 }

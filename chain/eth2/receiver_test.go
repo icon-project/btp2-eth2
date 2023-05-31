@@ -2,11 +2,14 @@ package eth2
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"testing"
 
-	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/ethereum/go-ethereum/common"
 	etypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
@@ -19,6 +22,8 @@ import (
 	"github.com/icon-project/btp2/common/types"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/icon-project/btp2-eth2/chain/eth2/client"
+	"github.com/icon-project/btp2-eth2/chain/eth2/client/lightclient"
 	"github.com/icon-project/btp2-eth2/chain/eth2/proof"
 )
 
@@ -73,19 +78,33 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 			for _, bu := range bus {
 				// verify next sync committee
 				if bu.NextSyncCommittee != nil {
-					leaf, err := bu.NextSyncCommittee.HashTreeRoot()
+					sc := SyncCommittee(*bu.NextSyncCommittee)
+					leaf, err := sc.HashTreeRoot()
 					assert.NoError(t, err)
+					hashes := make([][]byte, 0)
+					for _, el := range bu.NextSyncCommitteeBranch {
+						hashes = append(hashes, el)
+					}
 					verifyBranch(t,
 						int(proof.GIndexStateNextSyncCommittee),
 						leaf[:],
-						bu.NextSyncCommitteeBranch,
+						hashes,
 						bu.AttestedHeader.Beacon.StateRoot[:],
 					)
 				}
 				// verify finalized header
-				leaf, err := bu.FinalizedHeader.HashTreeRoot()
+				fh := LightClientHeader(*bu.FinalizedHeader)
+				leaf, err := fh.HashTreeRoot()
 				assert.NoError(t, err)
-				verifyBranch(t, int(proof.GIndexStateFinalizedRoot), leaf[:], bu.FinalizedHeaderBranch, bu.AttestedHeader.Beacon.StateRoot[:])
+				hashes := make([][]byte, 0)
+				for _, el := range bu.FinalizedHeaderBranch {
+					hashes = append(hashes, el)
+				}
+				verifyBranch(t,
+					int(proof.GIndexStateFinalizedRoot),
+					leaf[:],
+					hashes,
+					bu.AttestedHeader.Beacon.StateRoot[:])
 				VerifySyncAggregate(t, r, bu)
 			}
 		})
@@ -163,7 +182,7 @@ func TestReceiver_BlockProof(t *testing.T) {
 
 			mp := &messageProofData{
 				Slot: blockProofSlot,
-				Header: &altair.LightClientHeader{
+				Header: &lightclient.LightClientHeader{
 					Beacon: header.Header.Message,
 				},
 			}
@@ -216,7 +235,7 @@ func TestReceiver_MessageProof(t *testing.T) {
 
 	bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(slot, 10))
 	assert.NoError(t, err)
-	header := &altair.LightClientHeader{
+	header := &lightclient.LightClientHeader{
 		Beacon: bh.Header.Message,
 	}
 
@@ -229,11 +248,11 @@ func TestReceiver_MessageProof(t *testing.T) {
 	assert.True(t, ok)
 	assert.NoError(t, err)
 
-	block, err := r.cl.BeaconBlock(fmt.Sprintf("%d", slot))
+	block, err := r.cl.RawBeaconBlock(fmt.Sprintf("%d", slot))
 	assert.NoError(t, err)
 	assert.Equal(
 		t,
-		block.Capella.Message.Body.ExecutionPayload.ReceiptsRoot[:],
+		ReceiptsRoot(t, block),
 		mp.ReceiptsRootProof.Leaf[:],
 	)
 
@@ -267,10 +286,89 @@ func TestReceiver_MessageProof(t *testing.T) {
 	}
 }
 
+func ReceiptsRoot(t *testing.T, v *client.VersionedRawBeaconBlock) []byte {
+	switch v.Version {
+	case spec.DataVersionPhase0, spec.DataVersionAltair:
+		assert.FailNow(t, "not support at %s", v.Version)
+	case spec.DataVersionBellatrix:
+		e := &bellatrix.ExecutionPayload{}
+		if err := json.Unmarshal(v.Data.Message.Body.ExecutionPayload, e); err != nil {
+			assert.FailNow(t, "failed to parse %s signed beacon block, err:%s", v.Version, err.Error())
+		}
+		return e.ReceiptsRoot[:]
+	case spec.DataVersionCapella:
+		e := &capella.ExecutionPayload{}
+		if err := json.Unmarshal(v.Data.Message.Body.ExecutionPayload, e); err != nil {
+			assert.FailNow(t, "failed to parse %s signed beacon block, err:%s", v.Version, err.Error())
+		}
+		return e.ReceiptsRoot[:]
+	default:
+		assert.FailNow(t, "unknown version")
+	}
+	return nil
+}
+
 func receiptFromBytes(bs []byte) (*etypes.Receipt, error) {
 	r := new(etypes.Receipt)
 	if err := r.UnmarshalBinary(bs); err != nil {
 		return nil, err
 	}
 	return r, nil
+}
+
+type SyncCommittee lightclient.SyncCommittee
+
+// HashTreeRoot ssz hashes the SyncCommittee object
+func (s *SyncCommittee) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SyncCommittee object with a hasher
+func (s *SyncCommittee) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Pubkeys'
+	{
+		subIndx := hh.Index()
+		for _, i := range s.Pubkeys {
+			hh.PutBytes(i[:])
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (1) 'AggregatePubkey'
+	hh.PutBytes(s.AggregatePubkey[:])
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the SyncCommittee object
+func (s *SyncCommittee) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(s)
+}
+
+type LightClientHeader lightclient.LightClientHeader
+
+// HashTreeRoot ssz hashes the LightClientHeader object
+func (l *LightClientHeader) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(l)
+}
+
+// HashTreeRootWith ssz hashes the LightClientHeader object with a hasher
+func (l *LightClientHeader) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Beacon'
+	if err = l.Beacon.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the LightClientHeader object
+func (l *LightClientHeader) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(l)
 }

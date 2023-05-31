@@ -18,14 +18,13 @@ package eth2
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
 	"strconv"
 	"sync"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -43,6 +42,7 @@ import (
 	"github.com/icon-project/btp2/common/types"
 
 	"github.com/icon-project/btp2-eth2/chain/eth2/client"
+	"github.com/icon-project/btp2-eth2/chain/eth2/client/lightclient"
 	"github.com/icon-project/btp2-eth2/chain/eth2/proof"
 )
 
@@ -254,7 +254,7 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
 	header := mp.Header.Beacon
 	gindex := proof.BlockRootsIdxToGIndex(SlotToBlockRootsIndex(header.Slot))
-	r.l.Debugf("make blockProofData with blockRoots. slot:%d, gIndex:%d", header.Slot, gindex)
+	r.l.Debugf("make blockProofData with blockRoots. slot:%d, gIndex:%d, state:%d", header.Slot, gindex, bls.Verifier.Height)
 	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
 	if err != nil {
 		return nil, err
@@ -427,87 +427,83 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 		}
 	}
 
-	eth2Topics := []string{client.TopicLCOptimisticUpdate, client.TopicLCFinalityUpdate}
 	r.l.Debugf("Start ethereum monitoring")
-	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
-		if event.Topic == client.TopicLCOptimisticUpdate {
-			update := event.Data.(*altair.LightClientOptimisticUpdate)
-			slot := int64(update.AttestedHeader.Beacon.Slot)
-			r.l.Debugf("Get light client optimistic update. slot:%d", slot)
-			once.Do(func() {
-				r.l.Debugf("Check undelivered messages")
-				status, err := r.getStatus()
+	if err := r.cl.LightClientEvents(func(update *lightclient.LightClientOptimisticUpdate) {
+		slot := int64(update.AttestedHeader.Beacon.Slot)
+		r.l.Debugf("Get light client optimistic update. slot:%d", slot)
+		once.Do(func() {
+			r.l.Debugf("Check undelivered messages")
+			status, err := r.getStatus()
+			if err != nil {
+				r.l.Panicf("%+v", err)
+			}
+			// handle undelivered messages
+			if bls.RxSeq < status.TxSeq {
+				mps, err := r.makeMessageProofDataByRange(
+					bls.Verifier.Height-SlotPerEpoch, bls.RxSeq+1,
+					slot-1, status.TxSeq,
+				)
 				if err != nil {
-					r.l.Panicf("%+v", err)
+					r.l.Panicf("failed to add missing message. %+v", err)
 				}
-				// handle undelivered messages
-				if bls.RxSeq < status.TxSeq {
-					mps, err := r.makeMessageProofDataByRange(
-						bls.Verifier.Height-SlotPerEpoch, bls.RxSeq+1,
-						slot-1, status.TxSeq,
-					)
-					if err != nil {
-						r.l.Panicf("failed to add missing message. %+v", err)
-					}
-					r.l.Debugf("append %d messageProofDatas by range", len(mps))
-				}
-				fu, err := r.cl.LightClientFinalityUpdate()
-				if err != nil {
-					r.l.Panicf("failed to get Finality Update. %+v", err)
-				}
-				r.addCheckPointsByRange(int64(fu.FinalizedHeader.Beacon.Slot), slot-1)
-			})
-			mp, err := r.makeMessageProofData(update.AttestedHeader)
+				r.l.Debugf("append %d messageProofDatas by range", len(mps))
+			}
+			fu, err := r.cl.LightClientFinalityUpdate()
 			if err != nil {
-				r.l.Warnf("fail to make messageProofData. %+v", err)
-				return
+				r.l.Panicf("failed to get Finality Update. %+v", err)
 			}
-			if mp != nil {
-				r.seq = mp.EndSeq
-				r.mps = append(r.mps, mp)
-				r.l.Debugf("append new mp: %s", mp)
-			}
-			r.addCheckPoint(update.AttestedHeader.Beacon)
-		} else if event.Topic == client.TopicLCFinalityUpdate {
-			update := event.Data.(*altair.LightClientFinalityUpdate)
-			slot := int64(update.FinalizedHeader.Beacon.Slot)
-			r.l.Debugf("Get light client finality update. slot:%d", slot)
-			if bls.Verifier.Height >= slot {
-				r.l.Debugf("skip already processed finality update")
-				return
-			}
-			buds, err := r.makeBlockUpdateDatas(bls, update)
-			if err != nil {
-				r.l.Warnf("failed to make blockUpdateData. %+v", err)
-				return
-			}
-			err = r.validateMessageProofData(update)
-			lastSeq := r.prevRS.Seq()
-			lmp := r.GetLastMessageProofDataForHeight(slot)
-			if lmp != nil {
-				lastSeq = lmp.EndSeq
-			}
-			rs := &receiveStatus{seq: lastSeq, slot: slot, buds: buds}
-			if err != nil {
-				r.l.Warnf("failed to validate messageProofData. %+v", err)
-				return
-			}
-			r.rss = append(r.rss, rs)
-			r.rsc <- rs
-			r.prevRS = rs
+			r.addCheckPointsByRange(int64(fu.FinalizedHeader.Beacon.Slot), slot-1)
+		})
+		mp, err := r.makeMessageProofData(update.AttestedHeader)
+		if err != nil {
+			r.l.Warnf("fail to make messageProofData. %+v", err)
+			return
 		}
+		if mp != nil {
+			r.seq = mp.EndSeq
+			r.mps = append(r.mps, mp)
+			r.l.Debugf("append new mp: %s", mp)
+		}
+		r.addCheckPoint(update.AttestedHeader.Beacon)
+	}, func(update *lightclient.LightClientFinalityUpdate) {
+		slot := int64(update.FinalizedHeader.Beacon.Slot)
+		r.l.Debugf("Get light client finality update. slot:%d", slot)
+		if bls.Verifier.Height >= slot {
+			r.l.Debugf("skip already processed finality update")
+			return
+		}
+		buds, err := r.makeBlockUpdateDatas(bls, update)
+		if err != nil {
+			r.l.Warnf("failed to make blockUpdateData. %+v", err)
+			return
+		}
+		err = r.validateMessageProofData(update)
+		lastSeq := r.prevRS.Seq()
+		lmp := r.GetLastMessageProofDataForHeight(slot)
+		if lmp != nil {
+			lastSeq = lmp.EndSeq
+		}
+		rs := &receiveStatus{seq: lastSeq, slot: slot, buds: buds}
+		if err != nil {
+			r.l.Warnf("failed to validate messageProofData. %+v", err)
+			return
+		}
+		r.rss = append(r.rss, rs)
+		r.rsc <- rs
+		r.prevRS = rs
+	}, func(err error) (reconnect bool) {
+		return true
 	}); err != nil {
 		r.l.Debugf("onError %+v", err)
+		return err
 	}
 	return nil
 }
 
 func (r *receiver) makeBlockUpdateDatas(
 	bls *types.BMCLinkStatus,
-	update *altair.LightClientFinalityUpdate,
+	update *lightclient.LightClientFinalityUpdate,
 ) ([]*blockUpdateData, error) {
-	var nsc *altair.SyncCommittee
-	var nscBranch [][]byte
 	buds := make([]*blockUpdateData, 0)
 	scPeriod := SlotToSyncCommitteePeriod(update.FinalizedHeader.Beacon.Slot)
 	blsSCPeriod := SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))
@@ -518,7 +514,7 @@ func (r *receiver) makeBlockUpdateDatas(
 			return nil, err
 		}
 		for _, lcu := range lcUpdate {
-			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", SlotToSyncCommitteePeriod(lcu.SignatureSlot))
+			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", SlotToSyncCommitteePeriod(phase0.Slot(lcu.SignatureSlot)))
 			bud := &blockUpdateData{
 				AttestedHeader:          lcu.AttestedHeader,
 				FinalizedHeader:         lcu.FinalizedHeader,
@@ -532,6 +528,15 @@ func (r *receiver) makeBlockUpdateDatas(
 		}
 	}
 
+	// append blockUpdateData made by FinalityUpdate
+	r.l.Debugf("make blockUpdateData for finality update")
+	bud := &blockUpdateData{
+		AttestedHeader:        update.AttestedHeader,
+		FinalizedHeader:       update.FinalizedHeader,
+		FinalizedHeaderBranch: update.FinalityBranch,
+		SyncAggregate:         update.SyncAggregate,
+		SignatureSlot:         update.SignatureSlot,
+	}
 	if IsSyncCommitteeEdge(update.FinalizedHeader.Beacon.Slot) {
 		r.l.Debugf("make NextSyncCommittee for scPeriod=%d", scPeriod)
 		lcUpdate, err := r.cl.LightClientUpdates(scPeriod, 1)
@@ -539,20 +544,8 @@ func (r *receiver) makeBlockUpdateDatas(
 			return nil, err
 		}
 		lcu := lcUpdate[0]
-		nsc = lcu.NextSyncCommittee
-		nscBranch = lcu.NextSyncCommitteeBranch
-	}
-
-	// append blockUpdateData made by FinalityUpdate
-	r.l.Debugf("make blockUpdateData for finality update")
-	bud := &blockUpdateData{
-		AttestedHeader:          update.AttestedHeader,
-		FinalizedHeader:         update.FinalizedHeader,
-		FinalizedHeaderBranch:   update.FinalityBranch,
-		SyncAggregate:           update.SyncAggregate,
-		SignatureSlot:           update.SignatureSlot,
-		NextSyncCommittee:       nsc,
-		NextSyncCommitteeBranch: nscBranch,
+		bud.NextSyncCommittee = lcu.NextSyncCommittee
+		bud.NextSyncCommitteeBranch = lcu.NextSyncCommitteeBranch
 	}
 	buds = append(buds, bud)
 
@@ -565,9 +558,10 @@ func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) (
 	for i := from; i <= to; i++ {
 		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(i, 10))
 		if bh == nil || err != nil {
+			r.l.Debugln("BeaconBlockHeader", "i:", strconv.FormatInt(i, 10), "bh:", bh, "err:", err)
 			continue
 		}
-		mp, err := r.makeMessageProofData(&altair.LightClientHeader{Beacon: bh.Header.Message})
+		mp, err := r.makeMessageProofData(&lightclient.LightClientHeader{Beacon: bh.Header.Message})
 		if err != nil {
 			return nil, err
 		}
@@ -586,7 +580,7 @@ func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) (
 	return mps, nil
 }
 
-func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *messageProofData, err error) {
+func (r *receiver) makeMessageProofData(header *lightclient.LightClientHeader) (mp *messageProofData, err error) {
 	slot := int64(header.Beacon.Slot)
 	elBlockNum, err := r.cl.SlotToBlockNumber(phase0.Slot(slot))
 	if err != nil {
@@ -774,7 +768,7 @@ func (r *receiver) addCheckPointsByRange(from, to int64) {
 	}
 }
 
-func (r *receiver) validateMessageProofData(update *altair.LightClientFinalityUpdate) error {
+func (r *receiver) validateMessageProofData(update *lightclient.LightClientFinalityUpdate) error {
 	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
 	invalid := false
 	r.l.Debugf("validate messageProofDatas at %d.", fSlot)

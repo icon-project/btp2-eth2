@@ -23,12 +23,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/icon-project/btp2/common/cli"
 	"github.com/icon-project/btp2/common/log"
 	"github.com/spf13/cobra"
 
 	"github.com/icon-project/btp2-eth2/chain/eth2/client"
+	"github.com/icon-project/btp2-eth2/chain/eth2/client/lightclient"
 )
 
 var (
@@ -113,7 +113,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			sc := &altair.SyncCommittee{}
+			sc := &lightclient.SyncCommittee{}
 			err = sc.UnmarshalSSZ(scData)
 			if err != nil {
 				return err
@@ -123,7 +123,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			fh := &altair.LightClientHeader{}
+			fh := &lightclient.LightClientHeader{}
 			err = fh.UnmarshalSSZ(fhData)
 			if err != nil {
 				return err

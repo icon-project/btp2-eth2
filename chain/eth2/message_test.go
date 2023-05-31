@@ -3,15 +3,16 @@ package eth2
 import (
 	"testing"
 
-	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
+	"github.com/icon-project/btp2/common"
 	"github.com/icon-project/btp2/common/codec"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/icon-project/btp2-eth2/chain/eth2/client/lightclient"
 )
 
-var lightClientHeader = &altair.LightClientHeader{
+var lightClientHeader = &lightclient.LightClientHeader{
 	Beacon: &phase0.BeaconBlockHeader{
 		Slot:          phase0.Slot(4943744),
 		ProposerIndex: phase0.ValidatorIndex(222870),
@@ -39,7 +40,7 @@ var sszProof = &ssz.Proof{
 	},
 }
 
-var blsPubKey = phase0.BLSPubKey([48]byte{
+var blsPubKey = lightclient.BLSPubKey([48]byte{
 	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 	0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
 	0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
@@ -49,18 +50,18 @@ func TestMessage_BlockUpdateData(t *testing.T) {
 	bu := &blockUpdateData{
 		AttestedHeader:  lightClientHeader,
 		FinalizedHeader: lightClientHeader,
-		FinalizedHeaderBranch: [][]byte{
-			[]byte("branch0"),
-			[]byte("branch1"),
+		FinalizedHeaderBranch: []common.HexBytes{
+			common.HexBytes("branch0"),
+			common.HexBytes("branch1"),
 		},
-		SyncAggregate: &altair.SyncAggregate{
-			SyncCommitteeBits: bitfield.Bitvector512{
+		SyncAggregate: &lightclient.SyncAggregate{
+			SyncCommitteeBits: common.HexBytes{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
-			SyncCommitteeSignature: phase0.BLSSignature(
+			SyncCommitteeSignature: lightclient.BLSSignature(
 				[96]byte{
 					0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 					0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -71,9 +72,9 @@ func TestMessage_BlockUpdateData(t *testing.T) {
 				},
 			),
 		},
-		SignatureSlot: phase0.Slot(3),
-		NextSyncCommittee: &altair.SyncCommittee{
-			Pubkeys: []phase0.BLSPubKey{
+		SignatureSlot: lightclient.Slot(3),
+		NextSyncCommittee: &lightclient.SyncCommittee{
+			Pubkeys: []lightclient.BLSPubKey{
 				blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey,
 				blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey,
 				blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey, blsPubKey,
@@ -81,7 +82,7 @@ func TestMessage_BlockUpdateData(t *testing.T) {
 			},
 			AggregatePubkey: blsPubKey,
 		},
-		NextSyncCommitteeBranch: [][]byte{
+		NextSyncCommitteeBranch: []common.HexBytes{
 			[]byte("branch2"),
 			[]byte("branch3"),
 		},

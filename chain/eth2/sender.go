@@ -25,8 +25,6 @@ import (
 	"sync"
 	"time"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	etypes "github.com/ethereum/go-ethereum/core/types"
@@ -36,6 +34,7 @@ import (
 	"github.com/icon-project/btp2/common/wallet"
 
 	"github.com/icon-project/btp2-eth2/chain/eth2/client"
+	"github.com/icon-project/btp2-eth2/chain/eth2/client/lightclient"
 )
 
 const (
@@ -190,8 +189,7 @@ func (s *sender) getStatus(bn uint64) (*types.BMCLinkStatus, error) {
 }
 
 func (s *sender) handleFinalityUpdate() {
-	if err := s.cl.Events([]string{client.TopicLCFinalityUpdate}, func(event *api.Event) {
-		update := event.Data.(*altair.LightClientFinalityUpdate)
+	if err := s.cl.LightClientEvents(nil, func(update *lightclient.LightClientFinalityUpdate) {
 		s.l.Debugf("handle finality_update event slot:%d", update.FinalizedHeader.Beacon.Slot)
 		blockNumber, err := s.cl.SlotToBlockNumber(update.FinalizedHeader.Beacon.Slot)
 		if err != nil {
@@ -199,6 +197,8 @@ func (s *sender) handleFinalityUpdate() {
 			return
 		}
 		s.checkRelayResult(blockNumber)
+	}, func(err error) (reconnect bool) {
+		return true
 	}); err != nil {
 		s.l.Panicf("onError %v", err)
 	}
