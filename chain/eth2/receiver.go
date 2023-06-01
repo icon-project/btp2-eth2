@@ -232,8 +232,8 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messageProofData) (link.BlockProof, error) {
 	var bpd *blockProofData
 	var err error
-
-	if bls.Verifier.Height-mp.Slot < SlotPerHistoricalRoot {
+	slotPerHistoricalRoot := int64(r.cl.Spec().SlotPerHistoricalRoot())
+	if bls.Verifier.Height-mp.Slot < slotPerHistoricalRoot {
 		bpd, err = r.blockProofDataViaBlockRoots(bls, mp)
 	} else {
 		bpd, err = r.blockProofDataViaHistoricalSummaries(bls, mp)
@@ -253,7 +253,7 @@ func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messa
 
 func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
 	header := mp.Header.Beacon
-	gindex := proof.BlockRootsIdxToGIndex(SlotToBlockRootsIndex(header.Slot))
+	gindex := proof.BlockRootsIdxToGIndex(r.cl.Spec().SlotToBlockRootsIndex(header.Slot), r.cl.Spec().SlotPerHistoricalRoot())
 	r.l.Debugf("make blockProofData with blockRoots. slot:%d, gIndex:%d, state:%d", header.Slot, gindex, bls.Verifier.Height)
 	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
 	if err != nil {
@@ -267,6 +267,8 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 	if err != nil {
 		return nil, err
 	}
+	r.l.Debugf("blockProofDataViaBlockRoots bp:%s, proof:%s, headerRoot:%s",
+		hex.EncodeToString(bp), blockProof.String(), hex.EncodeToString(root[:]))
 	if bytes.Compare(root[:], blockProof.Leaf()) != 0 {
 		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, blockProof.Leaf())
 	}
@@ -278,7 +280,8 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 
 func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
 	header := mp.Header.Beacon
-	gindex := proof.HistoricalSummariesIdxToGIndex(SlotToHistoricalSummariesIndex(header.Slot))
+	gindex := proof.HistoricalSummariesIdxToGIndex(r.cl.Spec().SlotToHistoricalSummariesIndex(header.Slot),
+		r.cl.Spec().HistoricalRootLimit())
 	r.l.Debugf("make blockProofData with historicalSummaries. slot:%d, gIndex:%d", header.Slot, gindex)
 	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
 	if err != nil {
@@ -293,7 +296,7 @@ func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus
 	if err != nil {
 		return nil, err
 	}
-	gindex = proof.ArrayIdxToGIndex(1, SlotPerHistoricalRoot, SlotToBlockRootsIndex(header.Slot), 1)
+	gindex = proof.ArrayIdxToGIndex(1, r.cl.Spec().SlotPerHistoricalRoot(), r.cl.Spec().SlotToBlockRootsIndex(header.Slot), 1)
 	hProof, err := tr.Prove(int(gindex))
 	if err != nil {
 		return nil, err
@@ -308,18 +311,19 @@ func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus
 
 func (r *receiver) getHistoricalSummariesTrie(mp *messageProofData) (*ssz.Node, error) {
 	header := mp.Header.Beacon
-	roots := make([][]byte, SlotPerHistoricalRoot, SlotPerHistoricalRoot)
-	start := int64(HistoricalSummariesStartSlot(header.Slot))
+	slotPerHistoricalRoot := int64(r.cl.Spec().SlotPerHistoricalRoot())
+	roots := make([][]byte, slotPerHistoricalRoot, slotPerHistoricalRoot)
+	start := int64(r.cl.Spec().HistoricalSummariesStartSlot(header.Slot))
 	if _, ok := r.ht[start]; !ok {
 		var prevRoot []byte
-		for i := int64(1); i < SlotPerHistoricalRoot; i++ {
+		for i := int64(1); i < slotPerHistoricalRoot; i++ {
 			root, err := r.cl.BeaconBlockRoot(strconv.FormatInt(start-i, 10))
 			if root != nil && err == nil {
 				prevRoot = root[:]
 				break
 			}
 		}
-		for i := int64(0); i < SlotPerHistoricalRoot; i++ {
+		for i := int64(0); i < slotPerHistoricalRoot; i++ {
 			root, err := r.cl.BeaconBlockRoot(strconv.FormatInt(start+i, 10))
 			if root == nil || err != nil {
 				if i > 0 {
@@ -439,8 +443,9 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			}
 			// handle undelivered messages
 			if bls.RxSeq < status.TxSeq {
+				slotPerEpoch := int64(r.cl.Spec().SlotPerEpoch())
 				mps, err := r.makeMessageProofDataByRange(
-					bls.Verifier.Height-SlotPerEpoch, bls.RxSeq+1,
+					bls.Verifier.Height-slotPerEpoch, bls.RxSeq+1,
 					slot-1, status.TxSeq,
 				)
 				if err != nil {
@@ -505,8 +510,8 @@ func (r *receiver) makeBlockUpdateDatas(
 	update *lightclient.LightClientFinalityUpdate,
 ) ([]*blockUpdateData, error) {
 	buds := make([]*blockUpdateData, 0)
-	scPeriod := SlotToSyncCommitteePeriod(update.FinalizedHeader.Beacon.Slot)
-	blsSCPeriod := SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))
+	scPeriod := r.cl.Spec().SlotToSyncCommitteePeriod(update.FinalizedHeader.Beacon.Slot)
+	blsSCPeriod := r.cl.Spec().SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))
 
 	if scPeriod > blsSCPeriod {
 		lcUpdate, err := r.cl.LightClientUpdates(blsSCPeriod, scPeriod-blsSCPeriod)
@@ -514,7 +519,7 @@ func (r *receiver) makeBlockUpdateDatas(
 			return nil, err
 		}
 		for _, lcu := range lcUpdate {
-			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", SlotToSyncCommitteePeriod(phase0.Slot(lcu.SignatureSlot)))
+			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", r.cl.Spec().SlotToSyncCommitteePeriod(phase0.Slot(lcu.SignatureSlot)))
 			bud := &blockUpdateData{
 				AttestedHeader:          lcu.AttestedHeader,
 				FinalizedHeader:         lcu.FinalizedHeader,
@@ -537,7 +542,7 @@ func (r *receiver) makeBlockUpdateDatas(
 		SyncAggregate:         update.SyncAggregate,
 		SignatureSlot:         update.SignatureSlot,
 	}
-	if IsSyncCommitteeEdge(update.FinalizedHeader.Beacon.Slot) {
+	if r.cl.Spec().IsSyncCommitteeEdge(update.FinalizedHeader.Beacon.Slot) {
 		r.l.Debugf("make NextSyncCommittee for scPeriod=%d", scPeriod)
 		lcUpdate, err := r.cl.LightClientUpdates(scPeriod, 1)
 		if err != nil {
@@ -752,14 +757,15 @@ func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
 }
 
 func (r *receiver) addCheckPoint(bh *phase0.BeaconBlockHeader) {
-	if IsCheckPoint(bh.Slot) {
+	if r.cl.Spec().IsCheckPoint(bh.Slot) {
 		r.l.Debugf("add checkpoint at %d", bh.Slot)
 		r.cp[int64(bh.Slot)] = bh
 	}
 }
 
 func (r *receiver) addCheckPointsByRange(from, to int64) {
-	for start := int64(SlotToEpoch(phase0.Slot(from))+1) * SlotPerEpoch; start <= to; start += SlotPerEpoch {
+	slotPerEpoch := int64(r.cl.Spec().SlotPerEpoch())
+	for start := int64(r.cl.Spec().SlotToEpoch(phase0.Slot(from))+1) * slotPerEpoch; start <= to; start += slotPerEpoch {
 		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(start, 10))
 		if bh == nil || err != nil {
 			continue

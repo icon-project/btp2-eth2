@@ -18,8 +18,10 @@ package proof
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math"
+	"strings"
 
 	ssz "github.com/ferranbt/fastssz"
 )
@@ -34,6 +36,15 @@ func (s *SingleProof) SSZ() *ssz.Proof {
 
 func (s *SingleProof) Leaf() []byte {
 	return s.ssz.Leaf
+}
+
+func (s *SingleProof) String() string {
+	hs := make([]string, 0)
+	for _, h := range s.ssz.Hashes {
+		hs = append(hs, hex.EncodeToString(h))
+	}
+	return fmt.Sprintf("SingleProof{Index:%d,Leaf:%s,Hashes(%d):[%s]}", s.ssz.Index,
+		hex.EncodeToString(s.ssz.Leaf), len(s.ssz.Hashes), strings.Join(hs, ","))
 }
 
 func NewSingleProof(data []byte) (*SingleProof, error) {

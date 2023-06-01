@@ -27,13 +27,18 @@ import (
 	"github.com/icon-project/btp2-eth2/chain/eth2/proof"
 )
 
+const (
+	endpoint          = "https://sepolia.infura.io/v3/ffbf8ebe228f4758ae82e175640275e0"
+	consensusEndpoint = "http://20.20.5.191:9596"
+)
+
 func newReceiver(src, dest types.BtpAddress) *receiver {
 	r := NewReceiver(
 		src,
 		dest,
-		"https://sepolia.infura.io/v3/ffbf8ebe228f4758ae82e175640275e0",
+		endpoint,
 		map[string]interface{}{
-			"consensus_endpoint": "http://20.20.5.191:9596",
+			"consensus_endpoint": consensusEndpoint,
 		},
 		log.WithFields(log.Fields{log.FieldKeyPrefix: "test"}),
 	)
@@ -46,7 +51,7 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
 	)
 	defer r.Stop()
-
+	slotPerSyncCommitteePeriod := int64(r.cl.Spec().SlotPerSyncCommitteePeriod())
 	tests := []struct {
 		name     string
 		slotDiff int64
@@ -59,7 +64,7 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 		},
 		{
 			name:     "with nextSyncCommittee",
-			slotDiff: SlotPerSyncCommitteePeriod,
+			slotDiff: slotPerSyncCommitteePeriod,
 			buCount:  2,
 		},
 	}
@@ -139,6 +144,7 @@ func TestReceiver_BlockProof(t *testing.T) {
 	)
 	defer r.Stop()
 
+	slotPerHistoricalRoot := int64(r.cl.Spec().SlotPerHistoricalRoot())
 	tests := []struct {
 		name     string
 		slotDiff int64
@@ -153,15 +159,15 @@ func TestReceiver_BlockProof(t *testing.T) {
 		},
 		{
 			name:     "with historicalSummaries",
-			slotDiff: SlotPerHistoricalRoot + 10,
+			slotDiff: slotPerHistoricalRoot + 10,
 		},
 		{
 			name:     "with historicalSummaries",
-			slotDiff: SlotPerHistoricalRoot + 11,
+			slotDiff: slotPerHistoricalRoot + 11,
 		},
 		{
 			name:     "with historicalSummaries",
-			slotDiff: 2*SlotPerHistoricalRoot + 2,
+			slotDiff: 2*slotPerHistoricalRoot + 2,
 		},
 	}
 
@@ -206,7 +212,7 @@ func TestReceiver_BlockProof(t *testing.T) {
 
 			root, err := bpd.Header.Beacon.HashTreeRoot()
 			assert.NoError(t, err)
-			if tt.slotDiff < SlotPerHistoricalRoot {
+			if tt.slotDiff < slotPerHistoricalRoot {
 				assert.Nil(t, bpd.HistoricalProof)
 
 				// bp.proof.leaf == hash_tree_root(bp.header)

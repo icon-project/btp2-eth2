@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -38,9 +37,8 @@ import (
 )
 
 const (
-	txMaxDataSize       = 524288 //512 * 1024 // 512kB
-	txOverheadScale     = 0.37   //base64 encoding overhead 0.36, rlp and other fields 0.01
-	GetTXResultInterval = SecondPerSlot * time.Second
+	txMaxDataSize   = 524288 //512 * 1024 // 512kB
+	txOverheadScale = 0.37   //base64 encoding overhead 0.36, rlp and other fields 0.01
 )
 
 var (

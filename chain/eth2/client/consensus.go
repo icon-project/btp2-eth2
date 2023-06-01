@@ -28,6 +28,7 @@ type ConsensusLayer struct {
 	service eth2client.Service
 	lc      *lightclient.LightClient
 	uri     string
+	cs      ConsensusConfigSpec
 	log     log.Logger
 }
 
@@ -166,6 +167,10 @@ func (c *ConsensusLayer) SlotToBlockNumber(slot phase0.Slot) (uint64, error) {
 	return block.BlockNumber()
 }
 
+func (c *ConsensusLayer) Spec() ConsensusConfigSpec {
+	return c.cs
+}
+
 func (c *ConsensusLayer) Term() {
 	c.cancel()
 }
@@ -183,6 +188,10 @@ var (
 )
 
 func NewConsensusLayer(uri string, log log.Logger) (*ConsensusLayer, error) {
+	cs, err := NewConsensusConfigSpec(uri)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	service, err := multi.New(ctx,
 		multi.WithAddresses([]string{uri}),
@@ -197,6 +206,7 @@ func NewConsensusLayer(uri string, log log.Logger) (*ConsensusLayer, error) {
 		service: service,
 		lc:      lightclient.NewLightClient(uri, log),
 		uri:     uri,
+		cs:      cs,
 		log:     log,
 	}, nil
 }

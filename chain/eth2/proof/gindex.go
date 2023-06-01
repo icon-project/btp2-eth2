@@ -30,10 +30,10 @@ func ArrayIdxToGIndex(base, len, idx, elementSize uint64) uint64 {
 	return (base-1)<<(63-bits.LeadingZeros64(offset)) + offset
 }
 
-func BlockRootsIdxToGIndex(idx uint64) uint64 {
-	return ArrayIdxToGIndex(GIndexStateBlockRoots, 8192, idx, 1)
+func BlockRootsIdxToGIndex(idx, slotPerHistoricalRoot uint64) uint64 {
+	return ArrayIdxToGIndex(GIndexStateBlockRoots, slotPerHistoricalRoot, idx, 1)
 }
 
-func HistoricalSummariesIdxToGIndex(idx uint64) uint64 {
-	return ArrayIdxToGIndex(GIndexStateHistoricalSummaries, 1<<24, idx, 2)
+func HistoricalSummariesIdxToGIndex(idx, historicalRootsLimit uint64) uint64 {
+	return ArrayIdxToGIndex(GIndexStateHistoricalSummaries, historicalRootsLimit, idx, 2)
 }
