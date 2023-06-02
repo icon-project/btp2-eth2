@@ -58,6 +58,7 @@ async function deploy_bmv_eth2_java_with_seq(srcNetwork: IconNetwork, srcChain: 
       bmc: srcChain.contracts.bmc,
       ethBmc: dstChain.contracts.bmc,
       finalizedHeader: bmvInitData.finalized_header,
+      consensusConfig: bmvInitData.consensus_config,
       seq: bmcStatus.rx_seq,
     }
   })

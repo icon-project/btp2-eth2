@@ -26,6 +26,10 @@ func (c ConsensusConfigSpec) SlotPerEpoch() uint64 {
 	return c["SLOTS_PER_EPOCH"].(uint64)
 }
 
+func (c ConsensusConfigSpec) SyncCommitteeSize() uint64 {
+	return c["SYNC_COMMITTEE_SIZE"].(uint64)
+}
+
 func (c ConsensusConfigSpec) EpochsPerSyncCommitteePeriod() uint64 {
 	return c["EPOCHS_PER_SYNC_COMMITTEE_PERIOD"].(uint64)
 }

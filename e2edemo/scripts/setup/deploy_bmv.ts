@@ -112,6 +112,7 @@ async function deploy_bmv_eth2_java(srcNetwork: IconNetwork, srcChain: any, dstC
       bmc: srcChain.contracts.bmc,
       ethBmc: dstChain.contracts.bmc,
       finalizedHeader: bmvInitData.finalized_header,
+      consensusConfig: bmvInitData.consensus_config,
     }
   })
   const result = await bmv.getTxResult(deployTxHash);

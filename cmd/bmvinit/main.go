@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/icon-project/btp2/common/cli"
+	"github.com/icon-project/btp2/common/codec"
 	"github.com/icon-project/btp2/common/log"
 	"github.com/spf13/cobra"
 
@@ -41,6 +42,14 @@ type bmvInitData struct {
 	GenesisValidatorsHash string `json:"genesis_validators_hash"`
 	SyncCommittee         string `json:"sync_committee"`
 	FinalizedHeader       string `json:"finalized_header"`
+	ConsensusConfig       string `json:"consensus_config"`
+}
+
+type consensusConfig struct {
+	SlotPerEpoch                 uint64
+	EpochsPerSyncCommitteePeriod uint64
+	SyncCommitteeSize            uint64
+	SlotPerHistoricalRoot        uint64
 }
 
 func main() {
@@ -74,7 +83,11 @@ func main() {
 			if err != nil {
 				return err
 			}
-			initData, err := getBMVInitialData(url, blockId)
+			withSpec, err := cmd.Flags().GetBool("with-spec")
+			if err != nil {
+				return err
+			}
+			initData, err := getBMVInitialData(url, blockId, withSpec)
 			if err != nil {
 				return err
 			}
@@ -91,6 +104,7 @@ func main() {
 	genCMD.Flags().String("url", "http://20.20.5.191:9596", "URL of Beacon node API")
 	genCMD.Flags().String("output", "./bmv_init_data.json", "Output file name")
 	genCMD.Flags().String("block-id", "finalized", "Block ID")
+	genCMD.Flags().Bool("with-spec", false, "with consensus config spec")
 
 	decCMD := &cobra.Command{
 		Use:   "dec [file]",
@@ -132,6 +146,21 @@ func main() {
 			cmd.Println("{")
 			cmd.Printf("sync_committee.aggregated_pubkey: %s\n", sc.AggregatePubkey.String())
 			cmd.Printf("finalized_header: %s\n", fh.String())
+			if len(data.ConsensusConfig) > 0 {
+				ccData, err := hex.DecodeString(data.ConsensusConfig[2:])
+				if err != nil {
+					return err
+				}
+				cc := &consensusConfig{}
+				if _, err = codec.RLP.UnmarshalFromBytes(ccData, cc); err != nil {
+					return err
+				}
+				ccJson, err := json.Marshal(cc)
+				if err != nil {
+					return err
+				}
+				cmd.Printf("consensus_config: %s\n", string(ccJson))
+			}
 			cmd.Println("}")
 
 			return nil
@@ -146,7 +175,7 @@ func main() {
 	}
 }
 
-func getBMVInitialData(url, blockId string) (*bmvInitData, error) {
+func getBMVInitialData(url, blockId string, withSpec bool) (*bmvInitData, error) {
 	l := log.WithFields(log.Fields{})
 	c, err := client.NewConsensusLayer(url, l)
 	if err != nil {
@@ -185,6 +214,21 @@ func getBMVInitialData(url, blockId string) (*bmvInitData, error) {
 		SyncCommittee:         "0x" + hex.EncodeToString(syncCommittee),
 		FinalizedHeader:       "0x" + hex.EncodeToString(finalizedHeader),
 	}
+
+	if withSpec {
+		cs := &consensusConfig{
+			c.Spec().SlotPerEpoch(),
+			c.Spec().EpochsPerSyncCommitteePeriod(),
+			c.Spec().SyncCommitteeSize(),
+			c.Spec().SlotPerHistoricalRoot(),
+		}
+		var cc []byte
+		if cc, err = codec.RLP.MarshalToBytes(cs); err != nil {
+			return nil, err
+		}
+		data.ConsensusConfig = "0x" + hex.EncodeToString(cc)
+	}
+
 	fmt.Printf("Get initial data at Slot(%d) from %s\n", bootStrap.Header.Beacon.Slot, url)
 	return data, nil
 }
