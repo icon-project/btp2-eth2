@@ -1,6 +1,8 @@
 #!/bin/bash
 
 RELAY_BIN=../bin/relay
+LOG_LEVEL=${LOG_LEVEL:-debug}
+LOG_WRITER_FILENAME=${LOG_WRITER_FILENAME:-./relay.log}
 DEPLOYMENTS=deployments.json
 CHAIN_CONFIG=chain_config.json
 
@@ -46,18 +48,20 @@ else
   echo "Using BTPBlock mode"
   BMV_BRIDGE=false
 fi
-
+DIRECTION=${DIRECTION:-both}
 ${RELAY_BIN} \
-    --direction both \
+    --direction ${DIRECTION} \
     --src.address ${SRC_ADDRESS} \
     --src.endpoint ${SRC_ENDPOINT} \
     --src.key_store ${SRC_KEY_STORE} \
     --src.key_password ${SRC_KEY_PASSWORD} \
     --src.bridge_mode=${BMV_BRIDGE} \
-    ${SRC_OPTIONS:+--dst.options $SRC_OPTIONS} \
+    ${SRC_OPTIONS:+--src.options $SRC_OPTIONS} \
     --dst.address ${DST_ADDRESS} \
     --dst.endpoint ${DST_ENDPOINT} \
     --dst.key_store ${DST_KEY_STORE} \
     --dst.key_password ${DST_KEY_PASSWORD} \
     ${DST_OPTIONS:+--dst.options $DST_OPTIONS} \
+    --log_level=${LOG_LEVEL} \
+    --log_writer.filename=${LOG_WRITER_FILENAME} \
     start
