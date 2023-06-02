@@ -6,7 +6,7 @@ require (
 	github.com/attestantio/go-eth2-client v0.16.3
 	github.com/ethereum/go-ethereum v1.11.3
 	github.com/ferranbt/fastssz v0.1.3
-	github.com/icon-project/btp2 v1.0.1-0.20230601015545-fcd121af1ef7
+	github.com/icon-project/btp2 v1.0.1-0.20230601094927-b74f98410652
 	github.com/r3labs/sse/v2 v2.7.4
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1

@@ -485,6 +485,8 @@ github.com/icon-project/btp2 v1.0.1-0.20230531052058-b8fb77ef8354 h1:2ZoKRLrcdZf
 github.com/icon-project/btp2 v1.0.1-0.20230531052058-b8fb77ef8354/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
 github.com/icon-project/btp2 v1.0.1-0.20230601015545-fcd121af1ef7 h1:B7SiEY3n6TUd3tqbEyFHouorVUf++k6wIJEaJU92prg=
 github.com/icon-project/btp2 v1.0.1-0.20230601015545-fcd121af1ef7/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
+github.com/icon-project/btp2 v1.0.1-0.20230601094927-b74f98410652 h1:0BBi/jFYvxhq0xFapCkDlxWu8FYRMXGNOFzYWZLWkg8=
+github.com/icon-project/btp2 v1.0.1-0.20230601094927-b74f98410652/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
 github.com/imkira/go-interpol v1.1.0/go.mod h1:z0h2/2T3XF8kyEPpRgJ3kmNv+C43p+I/CoI+jC3w2iA=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/inconshreveable/mousetrap v1.0.1 h1:U3uMjPSQEBMNp1lFxmllqCPM6P5u/Xq7Pgzkat/bFNc=
