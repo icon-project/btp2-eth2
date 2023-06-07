@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  geth:
+    extends:
+      file: ./docker-compose.base.yml
+      service: geth
+    ports:
+      - 8551:8551
+      - 8545:8545
+  lodestar0:
+    extends:
+      file: ./docker-compose.base.yml
+      service: lodestar0
+    ports:
+      - 9596:9596
+  lodestar1:
+    extends:
+      file: ./docker-compose.base.yml
+      service: lodestar1
+    ports:
+      - 9597:9596

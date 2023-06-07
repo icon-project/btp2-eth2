@@ -1,7 +1,7 @@
 {
   "node_sock": "",
   "p2p": "127.0.0.1:8080",
-  "p2p_listen": ":7080",
+  "p2p_listen": ":8080",
   "rpc_addr": ":9080",
   "rpc_dump": false,
   "ee_socket": "",

@@ -1,0 +1,6 @@
+# icon/lodestar:dev image is not published,
+# it should build from https://github.com/icon-project/lodestar/tree/icon
+FROM icon/lodestar:dev
+RUN apk add jq
+ADD lodestar-dev.sh /usr/app/
+ENTRYPOINT ["./lodestar-dev.sh"]

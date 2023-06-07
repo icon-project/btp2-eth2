@@ -24,10 +24,17 @@
       "options": "consensus_endpoint=http://consensus-endpoint:9596",
       "keystore": "./docker/eth2/keystore.json",
       "keysecret": "./docker/eth2/keysecret"
+    },
+    "ether2_local": {
+      "network": "0x25d6efd.eth2",
+      "endpoint": "http://localhost:8545",
+      "options": "consensus_endpoint=http://localhost:9596",
+      "keystore": "./docker/eth2/keystore0.json",
+      "keypass": "hardhat"
     }
   },
   "link": {
     "src": "icon0",
-    "dst": "sepolia"
+    "dst": "ether2_local"
   }
 }

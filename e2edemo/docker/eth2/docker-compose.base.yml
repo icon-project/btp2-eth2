@@ -1,0 +1,79 @@
+version: "3.9"
+services:
+  geth:
+    image: "btp2-eth2/geth-dev"
+    build:
+      context: .
+      dockerfile: Dockerfile.geth-dev
+    environment:
+      - GENESIS=/config/genesis.json
+      - GENESIS_OUT=/execution/genesis.json
+      - DATA_DIR=/execution/data
+      - FEE_RECIPIENT_PK=/config/feereceipient.pk.txt
+      - GETH_PASSWORD=/config/geth_password.txt
+      - GENESIS_BLOCK=/execution/genesis_block.json
+    command:
+      - --http
+      - --http.api=eth
+      - --http.addr=0.0.0.0
+      - --authrpc.vhosts=*
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.jwtsecret=/config/jwtsecret
+      - --allow-insecure-unlock
+      - --unlock=0x123463a4b065722e99115d6c222f267d9cabb524
+      - --nodiscover
+      - --syncmode=full
+    volumes:
+      - ./config:/config:ro
+      - ./execution:/execution
+  lodestar0:
+    image: "btp2-eth2/lodestar-dev"
+    build:
+      context: .
+      dockerfile: Dockerfile.lodestar-dev
+    environment:
+      - SLEEP_SEC=5
+      - GENESIS_BLOCK=/execution/genesis_block.json
+      - GENESIS_DELAY=30
+      - PARAMS_SECONDS_PER_SLOT=3
+    command:
+      - dev
+      - --suggestedFeeRecipient=0x123463a4b065722e99115d6c222f267d9cabb524
+      - --execution.urls=http://geth:8551
+      - --jwt-secret=/config/jwtsecret
+      - --dataDir=/consensus/0
+      - --rest.address=0.0.0.0
+      - --persistNetworkIdentity=true
+      - --genesisValidators=64
+      - --startValidators=0..63
+    volumes:
+      - ./config:/config:ro
+      - ./consensus:/consensus
+      - ./execution:/execution
+    depends_on:
+      geth:
+        condition: service_started
+  lodestar1:
+    image: "btp2-eth2/lodestar-dev"
+    environment:
+      - SLEEP_SEC=10
+      - GENESIS_BLOCK=/execution/genesis_block.json
+      - GENESIS_DELAY=30
+      - PARAMS_SECONDS_PER_SLOT=3
+      - BOOTNODES_FILE=/consensus/0/enr
+    command:
+      - dev
+      - --suggestedFeeRecipient=0x123463a4b065722e99115d6c222f267d9cabb524
+      - --execution.urls=http://geth:8551
+      - --jwt-secret=/config/jwtsecret
+      - --dataDir=/consensus/1
+      - --rest.address=0.0.0.0
+      - --genesisValidators=64
+      - --startValidators=0..0
+    volumes:
+      - ./config:/config:ro
+      - ./consensus:/consensus
+      - ./execution:/execution
+    depends_on:
+      lodestar0:
+        condition: service_started 

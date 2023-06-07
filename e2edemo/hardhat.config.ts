@@ -20,7 +20,13 @@ const config: HardhatUserConfig = {
   networks: {
     sepolia: {
       url: `http://execution-endpoint:8545`,
-      accounts: ["your private key"]
+      // accounts: ["your private key"]
+    },
+    ether2_local: {
+      url: "http://localhost:8545",
+      accounts: {
+        mnemonic: "test test test test test test test test test test test junk"
+      }
     },
   },
 };

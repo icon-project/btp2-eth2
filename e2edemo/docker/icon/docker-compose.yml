@@ -1,0 +1,11 @@
+version: "3"
+services:
+  goloop:
+    extends:
+      file: ./docker-compose.base.yml
+      service: goloop
+    environment:
+      - P2P_PORT=7080
+    ports:
+      - 9080:9080
+      - 7080:8080

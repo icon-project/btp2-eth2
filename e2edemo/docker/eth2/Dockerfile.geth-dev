@@ -1,0 +1,4 @@
+FROM ethereum/client-go:latest
+RUN apk add jq
+ADD geth-dev.sh /
+ENTRYPOINT ["./geth-dev.sh"]

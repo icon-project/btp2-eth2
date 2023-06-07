@@ -5,7 +5,7 @@ GRADLE = ./gradlew
 
 HARDHAT = npx hardhat
 TS_NODE = npx ts-node
-NETWORK ?= sepolia
+NETWORK ?= ether2_local
 CHAIN_CONFIG ?= ./chain_config.json
 BMVINIT_WITH_SPEC ?= false
 CONSENSUS_ENDPOINT=$(shell jq -r .chains.$(NETWORK).options $(CHAIN_CONFIG) | cut -d '=' -f2)

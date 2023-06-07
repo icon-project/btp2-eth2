@@ -30,5 +30,11 @@ start_chain() {
 # start chain in backgound
 start_chain &
 
+if [[ "${GOLOOP_P2P}" == "" ]];then
+  P2P_PORT=${P2P_PORT:-8080}
+  P2P_HOST=${P2P_HOST:-$(hostname -i)}
+  P2P_OPT="--p2p=$(hostname -i):${P2P_PORT}"
+fi
+
 # start goloop server
-exec goloop server start
+exec goloop server start ${P2P_OPT}
