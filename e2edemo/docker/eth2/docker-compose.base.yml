@@ -43,6 +43,8 @@ services:
       - --jwt-secret=/config/jwtsecret
       - --dataDir=/consensus/0
       - --rest.address=0.0.0.0
+      - --rest.namespace=*
+      - --rest.cors=*
       - --persistNetworkIdentity=true
       - --genesisValidators=64
       - --startValidators=0..63
@@ -68,6 +70,8 @@ services:
       - --jwt-secret=/config/jwtsecret
       - --dataDir=/consensus/1
       - --rest.address=0.0.0.0
+      - --rest.namespace=*
+      - --rest.cors=*
       - --genesisValidators=64
       - --startValidators=0..0
     volumes:
