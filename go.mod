@@ -6,7 +6,7 @@ require (
 	github.com/attestantio/go-eth2-client v0.16.3
 	github.com/ethereum/go-ethereum v1.11.3
 	github.com/ferranbt/fastssz v0.1.3
-	github.com/icon-project/btp2 v1.0.1-0.20230601094927-b74f98410652
+	github.com/icon-project/btp2 v1.0.2
 	github.com/r3labs/sse/v2 v2.7.4
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1
@@ -44,7 +44,6 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/haltingstate/secp256k1-go v0.0.0-20151224084235-572209b26df6 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect

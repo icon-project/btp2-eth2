@@ -435,8 +435,6 @@ github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmg
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=
 github.com/grpc-ecosystem/grpc-gateway v1.9.0/go.mod h1:vNeuVxBJEsws4ogUvrchl83t/GYV9WGTSLVdBhOQFDY=
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
-github.com/haltingstate/secp256k1-go v0.0.0-20151224084235-572209b26df6 h1:HE4YDtvtpZgjRJ2tCOmaXlcpBTFG2e0jvfNntM5sXOs=
-github.com/haltingstate/secp256k1-go v0.0.0-20151224084235-572209b26df6/go.mod h1:73mKQiY8bLnscfGakn57WAJZTzT0eSUAy3qgMQNR/DI=
 github.com/hashicorp/consul/api v1.1.0/go.mod h1:VmuI/Lkw1nC05EYQWNKwWGbkg+FbDBtguAZLlVdkD9Q=
 github.com/hashicorp/consul/sdk v0.1.1/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
@@ -477,16 +475,8 @@ github.com/hydrogen18/memlistener v0.0.0-20141126152155-54553eb933fb/go.mod h1:q
 github.com/hydrogen18/memlistener v0.0.0-20200120041712-dcc25e7acd91/go.mod h1:qEIFzExnS6016fRpRfxrExeVn2gbClQA99gQhnIcdhE=
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
-github.com/icon-project/btp2 v1.0.0 h1:tXA2XdfyyZlH0Fy1nMpH1nFyQ3D0yExo1cNX02o4oE0=
-github.com/icon-project/btp2 v1.0.0/go.mod h1:OjJB+DjAwxwlOVMSW63lRepbcuiZUvBdmMwt7uDC8tM=
-github.com/icon-project/btp2 v1.0.1-0.20230525085928-de1737ce3438 h1:NysMVsH0NGqLVo8lMK7gkBlg3fnir1aOuVIVQru+zqk=
-github.com/icon-project/btp2 v1.0.1-0.20230525085928-de1737ce3438/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
-github.com/icon-project/btp2 v1.0.1-0.20230531052058-b8fb77ef8354 h1:2ZoKRLrcdZf5aYCScvK+SmYWtEb+4dp4aKCm4NZyBcY=
-github.com/icon-project/btp2 v1.0.1-0.20230531052058-b8fb77ef8354/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
-github.com/icon-project/btp2 v1.0.1-0.20230601015545-fcd121af1ef7 h1:B7SiEY3n6TUd3tqbEyFHouorVUf++k6wIJEaJU92prg=
-github.com/icon-project/btp2 v1.0.1-0.20230601015545-fcd121af1ef7/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
-github.com/icon-project/btp2 v1.0.1-0.20230601094927-b74f98410652 h1:0BBi/jFYvxhq0xFapCkDlxWu8FYRMXGNOFzYWZLWkg8=
-github.com/icon-project/btp2 v1.0.1-0.20230601094927-b74f98410652/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
+github.com/icon-project/btp2 v1.0.2 h1:cAVO6vp0tKMIHJ9JrnJsZY6k5ZO0I3qfZsXP8N5CXzA=
+github.com/icon-project/btp2 v1.0.2/go.mod h1:b7DySqhjd/RxPmP0bxOvm5yAjjxNvBGK7KFLqxoh4KY=
 github.com/imkira/go-interpol v1.1.0/go.mod h1:z0h2/2T3XF8kyEPpRgJ3kmNv+C43p+I/CoI+jC3w2iA=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/inconshreveable/mousetrap v1.0.1 h1:U3uMjPSQEBMNp1lFxmllqCPM6P5u/Xq7Pgzkat/bFNc=
