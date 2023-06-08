@@ -364,5 +364,40 @@ func (r *receiptProof) Format(f fmt.State, c rune) {
 }
 
 type BMVExtra struct {
-	targetSeq int64
+	LastMsgSeq  int64
+	LastMsgSlot int64
+}
+
+func (b *BMVExtra) RLPEncodeSelf(e codec.Encoder) error {
+	e2, err := e.EncodeList()
+	if err != nil {
+		return err
+	}
+	if err = e2.EncodeMulti(b.LastMsgSeq, b.LastMsgSlot); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *BMVExtra) RLPDecodeSelf(d codec.Decoder) error {
+	d2, err := d.DecodeList()
+	if err != nil {
+		return err
+	}
+	if _, err = d2.DecodeMulti(&b.LastMsgSeq, &b.LastMsgSlot); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *BMVExtra) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v', 's':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "BMVExtra{LastMsgSeq=%d LastMsgSlot=%d)", b.LastMsgSeq, b.LastMsgSlot)
+
+		} else {
+			fmt.Fprintf(f, "BMVExtra{%d %d)", b.LastMsgSeq, b.LastMsgSlot)
+		}
+	}
 }

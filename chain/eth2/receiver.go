@@ -442,10 +442,15 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Panicf("%+v", err)
 			}
 			// handle undelivered messages
+			extra := &BMVExtra{}
+			_, err = codec.RLP.UnmarshalFromBytes(bls.Verifier.Extra, extra)
+			if err != nil {
+				r.l.Panicf("%+v", err)
+			}
+			r.l.Debugf("Find undelivered messages with: %+v", extra)
 			if bls.RxSeq < status.TxSeq {
-				slotPerEpoch := int64(r.cl.Spec().SlotPerEpoch())
 				mps, err := r.makeMessageProofDataByRange(
-					bls.Verifier.Height-slotPerEpoch, bls.RxSeq+1,
+					extra.LastMsgSlot+1, bls.RxSeq+1,
 					slot-1, status.TxSeq,
 				)
 				if err != nil {
