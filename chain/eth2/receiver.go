@@ -271,7 +271,7 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 		return nil, err
 	}
 	r.l.Debugf("blockProofDataViaBlockRoots bp:%s, proof:%s, headerRoot:%s",
-		hex.EncodeToString(bp), blockProof.String(), hex.EncodeToString(root[:]))
+		hex.EncodeToString(bp), blockProof, hex.EncodeToString(root[:]))
 	if bytes.Compare(root[:], blockProof.Leaf()) != 0 {
 		r.l.Debugf("Invalid mp.header: %+v", header)
 		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, blockProof.Leaf())

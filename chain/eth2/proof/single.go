@@ -38,13 +38,21 @@ func (s *SingleProof) Leaf() []byte {
 	return s.ssz.Leaf
 }
 
-func (s *SingleProof) String() string {
-	hs := make([]string, 0)
-	for _, h := range s.ssz.Hashes {
-		hs = append(hs, hex.EncodeToString(h))
+func (s *SingleProof) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v', 's':
+		if f.Flag('+') {
+			hs := make([]string, 0)
+			for _, h := range s.ssz.Hashes {
+				hs = append(hs, hex.EncodeToString(h))
+			}
+			fmt.Fprintf(f, "SingleProof{Index:%d,Leaf:%s,Hashes(%d):[%s]}", s.ssz.Index,
+				hex.EncodeToString(s.ssz.Leaf), len(s.ssz.Hashes), strings.Join(hs, ","))
+		} else {
+			fmt.Fprintf(f, "SingleProof{Index:%d,Leaf:%s,Hashes(%d)}", s.ssz.Index,
+				hex.EncodeToString(s.ssz.Leaf), len(s.ssz.Hashes))
+		}
 	}
-	return fmt.Sprintf("SingleProof{Index:%d,Leaf:%s,Hashes(%d):[%s]}", s.ssz.Index,
-		hex.EncodeToString(s.ssz.Leaf), len(s.ssz.Hashes), strings.Join(hs, ","))
 }
 
 func NewSingleProof(data []byte) (*SingleProof, error) {
