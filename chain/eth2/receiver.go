@@ -449,10 +449,16 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				if err != nil {
 					r.l.Panicf("%+v", err)
 				}
-				r.l.Debugf("Find undelivered messages with: %+v", extra)
+				r.l.Debugf("Find undelivered messages with: %+v, %+v", bls, extra)
+				var fromSlot int64
+				if extra.LastMsgSeq != 0 {
+					fromSlot = extra.LastMsgSlot + 1
+				} else {
+					fromSlot = bls.Verifier.Height + 1
+				}
 				if bls.RxSeq < status.TxSeq {
 					mps, err := r.makeMessageProofDataByRange(
-						extra.LastMsgSlot+1, bls.RxSeq+1,
+						fromSlot, bls.RxSeq+1,
 						slot-1, status.TxSeq,
 					)
 					if err != nil {
