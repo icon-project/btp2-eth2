@@ -12,8 +12,8 @@ export class Jar {
     const regex = new RegExp(pattern);
     const dir = path.join(base, project, build);
     const files = fs.readdirSync(dir);
-    const matchingFiles = files.filter((file) => regex.test(file));
-    const optJar = matchingFiles[0];
+    const matchingFiles = files.filter((file) => regex.test(file)).sort();
+    const optJar = matchingFiles[matchingFiles.length - 1];
     const fullPath = path.join(base, project, build, optJar);
     return fs.readFileSync(fullPath).toString('hex')
   }
