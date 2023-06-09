@@ -125,6 +125,10 @@ func TestReceiver_BlockProof(t *testing.T) {
 		slotDiff int64
 	}{
 		{
+			name:     "at finalized slot",
+			slotDiff: 0,
+		},
+		{
 			name:     "with blockRoots",
 			slotDiff: 11,
 		},
@@ -181,6 +185,11 @@ func TestReceiver_BlockProof(t *testing.T) {
 			assert.NoError(t, err)
 
 			// ssz verify bp.proof
+			if tt.slotDiff == 0 {
+				assert.Equal(t, fu.FinalizedHeader.Beacon, bpd.Header.Beacon)
+				assert.Nil(t, bpd.Proof)
+				return
+			}
 			ok, err := ssz.VerifyProof(fu.FinalizedHeader.Beacon.StateRoot[:], bpd.Proof)
 			assert.True(t, ok)
 			assert.NoError(t, err)

@@ -232,8 +232,10 @@ func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link
 func (r *receiver) blockProofForMessageProof(bls *types.BMCLinkStatus, mp *messageProofData) (link.BlockProof, error) {
 	var bpd *blockProofData
 	var err error
-
-	if bls.Verifier.Height-mp.Slot < SlotPerHistoricalRoot {
+	if bls.Verifier.Height == mp.Slot {
+		r.l.Debugf("make blockProofData with empty proof. slot:%d, state:%d", mp.Slot, bls.Verifier.Height)
+		bpd = &blockProofData{Header: mp.Header, Proof: nil, HistoricalProof: nil}
+	} else if bls.Verifier.Height-mp.Slot < SlotPerHistoricalRoot {
 		bpd, err = r.blockProofDataViaBlockRoots(bls, mp)
 	} else {
 		bpd, err = r.blockProofDataViaHistoricalSummaries(bls, mp)
@@ -268,6 +270,7 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 		return nil, err
 	}
 	if bytes.Compare(root[:], blockProof.Leaf()) != 0 {
+		r.l.Debugf("Invalid mp.header: %+v", header)
 		return nil, errors.InvalidStateError.Errorf("invalid blockProofData. H:%#x != BP:%#x", root, blockProof.Leaf())
 	}
 	return &blockProofData{
