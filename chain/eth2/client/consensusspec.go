@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/http"
@@ -18,8 +19,8 @@ const (
 
 type ConsensusConfigSpec map[string]interface{}
 
-func (c ConsensusConfigSpec) SecondPerSlot() uint64 {
-	return c["SECONDS_PER_SLOT"].(uint64)
+func (c ConsensusConfigSpec) SecondPerSlot() time.Duration {
+	return c["SECONDS_PER_SLOT"].(time.Duration)
 }
 
 func (c ConsensusConfigSpec) SlotPerEpoch() uint64 {
