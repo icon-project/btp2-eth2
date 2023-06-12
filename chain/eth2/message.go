@@ -231,10 +231,12 @@ func (b *blockUpdateData) RLPDecodeSelf(d codec.Decoder) error {
 	if err != nil {
 		return err
 	}
-	b.NextSyncCommittee = new(altair.SyncCommittee)
-	err = b.NextSyncCommittee.UnmarshalSSZ(nsc)
-	if err != nil {
-		return err
+	if nsc != nil {
+		b.NextSyncCommittee = new(altair.SyncCommittee)
+		err = b.NextSyncCommittee.UnmarshalSSZ(nsc)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
