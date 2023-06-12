@@ -101,7 +101,7 @@ async function deploy_bmv_bridge_java(srcNetwork: IconNetwork, srcChain: any, ds
 async function deploy_bmv_eth2_java(srcNetwork: IconNetwork, srcChain: any, dstChain: any) {
   const bmvInitData = JSON.parse(fs.readFileSync(ETH2_BMV_INIT_PATH).toString());
   console.log(`java bmv init conf path ${ETH2_BMV_INIT_PATH}. ${bmvInitData}`);
-  const content = Jar.readFromFile(JAVASCORE_PATH, "bmv/eth2", "0.3.0");
+  const content = Jar.readFromFile(JAVASCORE_PATH, "bmv/eth2");
   const bmv = new Contract(srcNetwork)
   const deployTxHash = await bmv.deploy({
     content: content,
