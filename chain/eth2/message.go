@@ -18,6 +18,7 @@ package eth2
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -239,6 +240,29 @@ func (b *blockUpdateData) RLPDecodeSelf(d codec.Decoder) error {
 		}
 	}
 	return nil
+}
+
+func (b *blockUpdateData) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "blockUpdateData{AttestedHeader:%+v FinalizedHeader:%+v FinalizedHeaderBranch:%+v "+
+				"SignatureSlot:%+v SyncAggregate:%+v NextSyncCommittee:%+v NextSyncCommitteeBranch:%+v}",
+				b.AttestedHeader, b.FinalizedHeader, b.FinalizedHeaderBranch, b.SignatureSlot,
+				b.SyncAggregate, b.NextSyncCommittee, b.NextSyncCommitteeBranch)
+		} else {
+			fmt.Fprintf(f, "blockUpdateData{%v %v %v %v %v %v %v}",
+				b.AttestedHeader, b.FinalizedHeader, b.FinalizedHeaderBranch, b.SignatureSlot,
+				b.SyncAggregate, b.NextSyncCommittee, b.NextSyncCommitteeBranch)
+		}
+	case 's':
+		data, err := json.Marshal(b)
+		if err != nil {
+			fmt.Fprintf(f, "ERR: %v", err)
+			return
+		}
+		fmt.Fprintf(f, "%s", string(data))
+	}
 }
 
 type blockProofData struct {
