@@ -158,11 +158,11 @@ func getBMVInitialData(url, blockId string) (*bmvInitData, error) {
 		return nil, err
 	}
 
-	root, err := c.BeaconBlockRoot(blockId)
+	cp, err := c.FinalityCheckpoints("head")
 	if err != nil {
 		return nil, err
 	}
-	bootStrap, err := c.LightClientBootstrap(*root)
+	bootStrap, err := c.LightClientBootstrap(cp.Finalized.Root)
 	if err != nil {
 		return nil, err
 	}

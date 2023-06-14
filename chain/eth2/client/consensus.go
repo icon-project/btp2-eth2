@@ -47,6 +47,10 @@ func (c *ConsensusLayer) BeaconBlockRoot(blockID string) (*phase0.Root, error) {
 	return c.service.(*http.Service).BeaconBlockRoot(c.ctx, blockID)
 }
 
+func (c *ConsensusLayer) FinalityCheckpoints(stateID string) (*api.Finality, error) {
+	return c.service.(*http.Service).Finality(c.ctx, stateID)
+}
+
 func (c *ConsensusLayer) Events(topics []string, handler eth2client.EventHandlerFunc) error {
 	return c.service.(eth2client.EventsProvider).Events(c.ctx, topics, handler)
 }
