@@ -48,12 +48,26 @@ func (c *ExecutionLayer) GetBackend() bind.ContractBackend {
 }
 
 func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
 	txo, err := bind.NewKeyedTransactorWithChainID(k, c.chainID)
 	if err != nil {
 		return nil, err
 	}
-	txo.GasPrice, _ = c.client.SuggestGasPrice(context.Background())
-	txo.GasLimit = uint64(DefaultGasLimit)
+	block, err := c.client.BlockByNumber(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	baseFee := block.BaseFee()
+	tip, err := c.client.SuggestGasTipCap(ctx)
+	if err != nil {
+		return nil, err
+	}
+	max := big.NewInt(0).Add(tip, baseFee)
+	max.Sub(max, big.NewInt(1))
+	txo.GasFeeCap = max
+	txo.GasTipCap = tip
+
 	return txo, nil
 }
 
