@@ -449,6 +449,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				if err != nil {
 					r.l.Panicf("%+v", err)
 				}
+				fu, err := r.cl.LightClientFinalityUpdate()
+				if err != nil {
+					r.l.Panicf("failed to get Finality Update. %+v", err)
+				}
 				r.l.Debugf("Find undelivered messages with: %+v, %+v", bls, extra)
 				var fromSlot int64
 				if extra.LastMsgSeq != 0 {
@@ -466,10 +470,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 					}
 					r.l.Debugf("append %d messageProofDatas by range", len(mps))
 				}
-				fu, err := r.cl.LightClientFinalityUpdate()
-				if err != nil {
-					r.l.Panicf("failed to get Finality Update. %+v", err)
-				}
+
 				r.addCheckPointsByRange(int64(fu.FinalizedHeader.Beacon.Slot), slot-1)
 			})
 			mp, err := r.makeMessageProofData(update.AttestedHeader)
@@ -809,7 +810,7 @@ func (r *receiver) validateMessageProofData(update *altair.LightClientFinalityUp
 		aSlot := int64(update.AttestedHeader.Beacon.Slot)
 
 		mps, err := r.makeMessageProofDataByRange(
-			r.prevRS.Height()+1, r.prevRS.Seq(), aSlot, math.MaxInt64,
+			r.prevRS.Height()+1, r.prevRS.Seq()+1, aSlot, math.MaxInt64,
 		)
 		if err != nil {
 			return err
