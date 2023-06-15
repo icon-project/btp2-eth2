@@ -492,6 +492,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Debugf("skip already processed finality update")
 				return
 			}
+			if err := validateFinalityUpdate(update); err != nil {
+				r.l.Debugf("invalid finality update. %v", err)
+				return
+			}
 			buds, err := r.makeBlockUpdateDatas(bls, update)
 			if err != nil {
 				r.l.Warnf("failed to make blockUpdateData. %+v", err)
@@ -515,6 +519,35 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	}); err != nil {
 		r.l.Debugf("onError %+v", err)
 	}
+	return nil
+}
+
+func validateFinalityUpdate(u *altair.LightClientFinalityUpdate) error {
+	if u.FinalizedHeader.Beacon.Slot > u.AttestedHeader.Beacon.Slot {
+		return errors.Errorf("invalid slot. finalized header > attested header")
+	}
+	if u.AttestedHeader.Beacon.Slot >= u.SignatureSlot {
+		return errors.Errorf("invalid slot. attested header >= signature")
+	}
+
+	if u.SyncAggregate.SyncCommitteeBits.Count()*3 < u.SyncAggregate.SyncCommitteeBits.Len() {
+		return errors.Errorf("not enough SyncAggregate participants")
+	}
+
+	leaf, err := u.FinalizedHeader.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+	_, err = proof.VerifyBranch(
+		int(proof.GIndexStateFinalizedRoot),
+		leaf[:],
+		u.FinalityBranch,
+		u.AttestedHeader.Beacon.StateRoot[:],
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -75,32 +75,31 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 				if bu.NextSyncCommittee != nil {
 					leaf, err := bu.NextSyncCommittee.HashTreeRoot()
 					assert.NoError(t, err)
-					verifyBranch(t,
+					ok, err := proof.VerifyBranch(
 						int(proof.GIndexStateNextSyncCommittee),
 						leaf[:],
 						bu.NextSyncCommitteeBranch,
 						bu.AttestedHeader.Beacon.StateRoot[:],
 					)
+					assert.True(t, ok)
+					assert.NoError(t, err)
 				}
 				// verify finalized header
 				leaf, err := bu.FinalizedHeader.HashTreeRoot()
 				assert.NoError(t, err)
-				verifyBranch(t, int(proof.GIndexStateFinalizedRoot), leaf[:], bu.FinalizedHeaderBranch, bu.AttestedHeader.Beacon.StateRoot[:])
+				ok, err := proof.VerifyBranch(
+					int(proof.GIndexStateFinalizedRoot),
+					leaf[:],
+					bu.FinalizedHeaderBranch,
+					bu.AttestedHeader.Beacon.StateRoot[:],
+				)
+				assert.True(t, ok)
+				assert.NoError(t, err)
+
 				VerifySyncAggregate(t, r, bu)
 			}
 		})
 	}
-}
-
-func verifyBranch(t *testing.T, index int, leaf []byte, hashes [][]byte, root []byte) {
-	proof := &ssz.Proof{
-		Index:  index,
-		Leaf:   leaf,
-		Hashes: hashes,
-	}
-	ok, err := ssz.VerifyProof(root, proof)
-	assert.True(t, ok)
-	assert.NoError(t, err)
 }
 
 func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
