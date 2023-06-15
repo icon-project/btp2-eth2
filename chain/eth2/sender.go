@@ -83,7 +83,7 @@ type sender struct {
 
 	cl  *client.ConsensusLayer
 	el  *client.ExecutionLayer
-	bmc *client.BMC
+	bmc *client.BMCClient
 }
 
 func NewSender(src, dst types.BtpAddress, w wallet.Wallet, endpoint string, opt map[string]interface{}, l log.Logger) types.Sender {
@@ -103,9 +103,10 @@ func NewSender(src, dst types.BtpAddress, w wallet.Wallet, endpoint string, opt 
 	if err != nil {
 		l.Panicf("fail to connect to %s, %v", opt["consensus_endpoint"].(string), err)
 	}
-	s.bmc, err = client.NewBMC(common.HexToAddress(s.dst.ContractAddress()), s.el.GetBackend())
+	txUrl, _ := opt["execution_tx_endpoint"].(string)
+	s.bmc, err = client.NewBMCClient(common.HexToAddress(s.dst.ContractAddress()), s.el.GetBackend(), txUrl, l)
 	if err != nil {
-		l.Panicf("fail to get instance of BMC %s, %v", s.dst.ContractAddress(), err)
+		l.Panicf("fail to connect to BMC %s, %v", s.dst.ContractAddress(), err)
 	}
 	return s
 }
