@@ -54,21 +54,23 @@ func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey) (*bind.TransactOpt
 	if err != nil {
 		return nil, err
 	}
-	block, err := c.client.BlockByNumber(ctx, nil)
+	fh, err := c.client.FeeHistory(ctx, 3, nil, []float64{50})
 	if err != nil {
 		return nil, err
 	}
-	baseFee := block.BaseFee()
-	tip, err := c.client.SuggestGasTipCap(ctx)
-	if err != nil {
-		return nil, err
+	rewards := new(big.Int)
+	for _, r := range fh.Reward {
+		rewards.Add(rewards, r[0])
 	}
-	max := big.NewInt(0).Add(tip, baseFee)
-	max.Sub(max, big.NewInt(1))
-	txo.GasFeeCap = max
-	txo.GasTipCap = tip
+	txo.GasTipCap = rewards.Div(rewards, big.NewInt(int64(len(fh.Reward))))
 
 	return txo, nil
+}
+
+func (c *ExecutionLayer) FeeHistory(blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*ethereum.FeeHistory, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+	return c.client.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 }
 
 func (c *ExecutionLayer) GetChainID() (*big.Int, error) {
