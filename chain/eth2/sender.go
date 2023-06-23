@@ -42,6 +42,7 @@ const (
 	txMaxDataSize       = 524288 //512 * 1024 // 512kB
 	txOverheadScale     = 0.37   //base64 encoding overhead 0.36, rlp and other fields 0.01
 	GetTXResultInterval = SecondPerSlot * time.Second
+	txPendingMAX        = 3 // unit: finality
 )
 
 var (
@@ -49,25 +50,43 @@ var (
 )
 
 type request struct {
-	id     int
-	txHash common.Hash
+	rm             types.RelayMessage
+	txHash         common.Hash
+	txPendingCount int
 }
 
-func (r request) ID() int {
-	return r.id
+func (r *request) RelayMessage() types.RelayMessage {
+	return r.rm
 }
 
-func (r request) TxHash() common.Hash {
+func (r *request) ID() int {
+	return r.rm.Id()
+}
+
+func (r *request) TxHash() common.Hash {
 	return r.txHash
 }
 
-func (r request) Format(f fmt.State, c rune) {
+func (r *request) SetTxHash(txHash common.Hash) {
+	r.txHash = txHash
+}
+
+func (r *request) SetTxPendingCount(value int) {
+	r.txPendingCount = value
+}
+
+func (r *request) IncTxPendingCount() int {
+	r.txPendingCount += 1
+	return r.txPendingCount
+}
+
+func (r *request) Format(f fmt.State, c rune) {
 	switch c {
 	case 'v', 's':
 		if f.Flag('+') {
-			fmt.Fprintf(f, "request{id=%d txHash=%#x)", r.id, r.txHash)
+			fmt.Fprintf(f, "request{id=%d txHash=%#x txPendingCount=%d)", r.ID(), r.txHash, r.txPendingCount)
 		} else {
-			fmt.Fprintf(f, "request{%d %#x)", r.id, r.txHash)
+			fmt.Fprintf(f, "request{%d %#x %d)", r.ID(), r.txHash, r.txPendingCount)
 		}
 	}
 }
@@ -126,18 +145,22 @@ func (s *sender) GetStatus() (*types.BMCLinkStatus, error) {
 }
 
 func (s *sender) Relay(rm types.RelayMessage) (int, error) {
-	s.l.Debugf("Relay src address:%s rm id:%d", s.src.String(), rm.Id())
+	if tx, err := s.relay(rm); err != nil {
+		return rm.Id(), err
+	} else {
+		s.addRequest(&request{rm: rm, txHash: tx.Hash()})
+	}
+	return rm.Id(), nil
+}
+
+func (s *sender) relay(rm types.RelayMessage) (*etypes.Transaction, error) {
+	s.l.Debugf("relay src address:%s rm id:%d", s.src.String(), rm.Id())
 	t, err := s.el.NewTransactOpts(s.w.(*wallet.EvmWallet).Skey)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	tx, err := s.bmc.HandleRelayMessage(t, s.src.String(), rm.Bytes())
-	if err != nil {
-		return 0, err
-	}
-	s.addRequest(&request{id: rm.Id(), txHash: tx.Hash()})
-	return rm.Id(), nil
+	return s.bmc.HandleRelayMessage(t, s.src.String(), rm.Bytes())
 }
 
 func (s *sender) GetMarginForLimit() int64 {
@@ -208,14 +231,25 @@ func (s *sender) handleFinalityUpdate() {
 func (s *sender) checkRelayResult(to uint64) {
 	finished := make([]*request, 0)
 	s.mtx.RLock()
-	for _, req := range s.reqs {
+	for i, req := range s.reqs {
 		_, pending, err := s.el.TransactionByHash(req.TxHash())
 		if err != nil {
 			s.l.Warnf("can't get TX %#x. %v", req.TxHash(), err)
 			break
 		}
 		if pending {
-			s.l.Debugf("TX %#x is not yet executed", req.TxHash())
+			s.l.Debugf("TX %#x is not yet executed.", req.TxHash())
+			if req.IncTxPendingCount() == txPendingMAX {
+				s.l.Debugf("resend rm %d", req.ID())
+				if tx, err := s.relay(req.RelayMessage()); err != nil {
+					s.l.Errorf("fail to resend relay message %d", req.ID())
+				} else {
+					req.SetTxHash(tx.Hash())
+					req.SetTxPendingCount(0)
+				}
+			}
+			s.reqs[i] = req
+			s.l.Debugf("update req: %+v", s.reqs[i])
 			break
 		}
 		receipt, err := s.el.TransactionReceipt(req.TxHash())
