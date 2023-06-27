@@ -112,6 +112,29 @@ func (l *LightClientHeader) SizeSSZ() (size int) {
 	return
 }
 
+// HashTreeRoot ssz hashes the LightClientHeader object
+func (l *LightClientHeader) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(l)
+}
+
+// HashTreeRootWith ssz hashes the LightClientHeader object with a hasher
+func (l *LightClientHeader) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Beacon'
+	if err = l.Beacon.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the LightClientHeader object
+func (l *LightClientHeader) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(l)
+}
+
 type LightClientUpdate struct {
 	AttestedHeader          *LightClientHeader `json:"attested_header"`
 	NextSyncCommittee       *SyncCommittee     `json:"next_sync_committee"`

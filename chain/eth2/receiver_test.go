@@ -83,48 +83,33 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 			for _, bu := range bus {
 				// verify next sync committee
 				if bu.NextSyncCommittee != nil {
-					sc := SyncCommittee(*bu.NextSyncCommittee)
-					leaf, err := sc.HashTreeRoot()
+					leaf, err := bu.NextSyncCommittee.HashTreeRoot()
 					assert.NoError(t, err)
-					hashes := make([][]byte, 0)
-					for _, el := range bu.NextSyncCommitteeBranch {
-						hashes = append(hashes, el)
-					}
-					verifyBranch(t,
+					ok, err := proof.VerifyBranch(
 						int(proof.GIndexStateNextSyncCommittee),
 						leaf[:],
-						hashes,
+						BranchToHashes(bu.NextSyncCommitteeBranch),
 						bu.AttestedHeader.Beacon.StateRoot[:],
 					)
+					assert.True(t, ok)
+					assert.NoError(t, err)
 				}
 				// verify finalized header
-				fh := LightClientHeader(*bu.FinalizedHeader)
-				leaf, err := fh.HashTreeRoot()
+				leaf, err := bu.FinalizedHeader.HashTreeRoot()
 				assert.NoError(t, err)
-				hashes := make([][]byte, 0)
-				for _, el := range bu.FinalizedHeaderBranch {
-					hashes = append(hashes, el)
-				}
-				verifyBranch(t,
+				ok, err := proof.VerifyBranch(
 					int(proof.GIndexStateFinalizedRoot),
 					leaf[:],
-					hashes,
-					bu.AttestedHeader.Beacon.StateRoot[:])
+					BranchToHashes(bu.FinalizedHeaderBranch),
+					bu.AttestedHeader.Beacon.StateRoot[:],
+				)
+				assert.True(t, ok)
+				assert.NoError(t, err)
+
 				VerifySyncAggregate(t, r, bu)
 			}
 		})
 	}
-}
-
-func verifyBranch(t *testing.T, index int, leaf []byte, hashes [][]byte, root []byte) {
-	proof := &ssz.Proof{
-		Index:  index,
-		Leaf:   leaf,
-		Hashes: hashes,
-	}
-	ok, err := ssz.VerifyProof(root, proof)
-	assert.True(t, ok)
-	assert.NoError(t, err)
 }
 
 func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
@@ -329,61 +314,4 @@ func receiptFromBytes(bs []byte) (*etypes.Receipt, error) {
 		return nil, err
 	}
 	return r, nil
-}
-
-type SyncCommittee lightclient.SyncCommittee
-
-// HashTreeRoot ssz hashes the SyncCommittee object
-func (s *SyncCommittee) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(s)
-}
-
-// HashTreeRootWith ssz hashes the SyncCommittee object with a hasher
-func (s *SyncCommittee) HashTreeRootWith(hh ssz.HashWalker) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'Pubkeys'
-	{
-		subIndx := hh.Index()
-		for _, i := range s.Pubkeys {
-			hh.PutBytes(i[:])
-		}
-		hh.Merkleize(subIndx)
-	}
-
-	// Field (1) 'AggregatePubkey'
-	hh.PutBytes(s.AggregatePubkey[:])
-
-	hh.Merkleize(indx)
-	return
-}
-
-// GetTree ssz hashes the SyncCommittee object
-func (s *SyncCommittee) GetTree() (*ssz.Node, error) {
-	return ssz.ProofTree(s)
-}
-
-type LightClientHeader lightclient.LightClientHeader
-
-// HashTreeRoot ssz hashes the LightClientHeader object
-func (l *LightClientHeader) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(l)
-}
-
-// HashTreeRootWith ssz hashes the LightClientHeader object with a hasher
-func (l *LightClientHeader) HashTreeRootWith(hh ssz.HashWalker) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'Beacon'
-	if err = l.Beacon.HashTreeRootWith(hh); err != nil {
-		return
-	}
-
-	hh.Merkleize(indx)
-	return
-}
-
-// GetTree ssz hashes the LightClientHeader object
-func (l *LightClientHeader) GetTree() (*ssz.Node, error) {
-	return ssz.ProofTree(l)
 }

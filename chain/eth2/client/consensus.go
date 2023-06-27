@@ -111,6 +111,10 @@ func (c *ConsensusLayer) BeaconBlockRoot(blockID string) (*phase0.Root, error) {
 	return c.service.(eth2client.BeaconBlockRootProvider).BeaconBlockRoot(c.ctx, blockID)
 }
 
+func (c *ConsensusLayer) FinalityCheckpoints(stateID string) (*api.Finality, error) {
+	return c.service.(eth2client.FinalityProvider).Finality(c.ctx, stateID)
+}
+
 func (c *ConsensusLayer) LightClientEvents(ocb lightclient.OptimisticUpdateCallbackFunc,
 	fcb lightclient.FinalityUpdateCallbackFunc, ecb func(err error) (reconnect bool)) error {
 	return c.lc.Events(ocb, fcb, ecb)

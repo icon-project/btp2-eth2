@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/bits"
 	"strconv"
 	"sync"
 
@@ -451,10 +452,20 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			if err != nil {
 				r.l.Panicf("%+v", err)
 			}
-			r.l.Debugf("Find undelivered messages with: %+v", extra)
+			fu, err := r.cl.LightClientFinalityUpdate()
+			if err != nil {
+				r.l.Panicf("failed to get Finality Update. %+v", err)
+			}
+			r.l.Debugf("Find undelivered messages with: %+v, %+v", bls, extra)
+			var fromSlot int64
+			if extra.LastMsgSeq != 0 {
+				fromSlot = extra.LastMsgSlot + 1
+			} else {
+				fromSlot = bls.Verifier.Height + 1
+			}
 			if bls.RxSeq < status.TxSeq {
 				mps, err := r.makeMessageProofDataByRange(
-					extra.LastMsgSlot+1, bls.RxSeq+1,
+					fromSlot, bls.RxSeq+1,
 					slot-1, status.TxSeq,
 				)
 				if err != nil {
@@ -462,10 +473,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				}
 				r.l.Debugf("append %d messageProofDatas by range", len(mps))
 			}
-			fu, err := r.cl.LightClientFinalityUpdate()
-			if err != nil {
-				r.l.Panicf("failed to get Finality Update. %+v", err)
-			}
+
 			r.addCheckPointsByRange(int64(fu.FinalizedHeader.Beacon.Slot), slot-1)
 		})
 		mp, err := r.makeMessageProofData(update.AttestedHeader)
@@ -484,6 +492,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 		r.l.Debugf("Get light client finality update. slot:%d", slot)
 		if bls.Verifier.Height >= slot {
 			r.l.Debugf("skip already processed finality update")
+			return
+		}
+		if err := validateFinalityUpdate(update); err != nil {
+			r.l.Debugf("invalid finality update. %v", err)
 			return
 		}
 		buds, err := r.makeBlockUpdateDatas(bls, update)
@@ -511,6 +523,50 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 		r.l.Debugf("onError %+v", err)
 		return err
 	}
+	return nil
+}
+
+func BitsCount(b []byte) uint64 {
+	c := 0
+	if len(b) == 0 {
+		return 0
+	}
+	for _, bt := range b {
+		c += bits.OnesCount8(bt)
+	}
+	return uint64(c)
+}
+
+func BitsLen(b []byte) uint64 {
+	return uint64(len(b) * 8)
+}
+
+func validateFinalityUpdate(u *lightclient.LightClientFinalityUpdate) error {
+	if u.FinalizedHeader.Beacon.Slot > u.AttestedHeader.Beacon.Slot {
+		return errors.Errorf("invalid slot. finalized header > attested header")
+	}
+	if u.AttestedHeader.Beacon.Slot >= phase0.Slot(u.SignatureSlot) {
+		return errors.Errorf("invalid slot. attested header >= signature")
+	}
+
+	if BitsCount(u.SyncAggregate.SyncCommitteeBits)*3 < BitsLen(u.SyncAggregate.SyncCommitteeBits) {
+		return errors.Errorf("not enough SyncAggregate participants")
+	}
+
+	leaf, err := u.FinalizedHeader.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+	_, err = proof.VerifyBranch(
+		int(proof.GIndexStateFinalizedRoot),
+		leaf[:],
+		BranchToHashes(u.FinalityBranch),
+		u.AttestedHeader.Beacon.StateRoot[:],
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -803,7 +859,7 @@ func (r *receiver) validateMessageProofData(update *lightclient.LightClientFinal
 		aSlot := int64(update.AttestedHeader.Beacon.Slot)
 
 		mps, err := r.makeMessageProofDataByRange(
-			r.prevRS.Height()+1, r.prevRS.Seq(), aSlot, math.MaxInt64,
+			r.prevRS.Height()+1, r.prevRS.Seq()+1, aSlot, math.MaxInt64,
 		)
 		if err != nil {
 			return err

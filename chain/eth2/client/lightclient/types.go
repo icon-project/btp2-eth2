@@ -90,6 +90,36 @@ func (s *SyncCommittee) SizeSSZ() (size int) {
 	return
 }
 
+// HashTreeRoot ssz hashes the SyncCommittee object
+func (s *SyncCommittee) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SyncCommittee object with a hasher
+func (s *SyncCommittee) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Pubkeys'
+	{
+		subIndx := hh.Index()
+		for _, i := range s.Pubkeys {
+			hh.PutBytes(i[:])
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (1) 'AggregatePubkey'
+	hh.PutBytes(s.AggregatePubkey[:])
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the SyncCommittee object
+func (s *SyncCommittee) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(s)
+}
+
 type BLSSignature phase0.BLSSignature
 
 func (b BLSSignature) MarshalJSON() ([]byte, error) {

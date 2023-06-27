@@ -8,7 +8,12 @@ export class Jar {
     }
     const build = "build/libs";
     const name = project.replace("/", "-");
-    const optJar = `${name}-${version ? version: "0.1.0"}-optimized.jar`;
+    const pattern = `${name}-${version ? version: "(\\S)+"}-optimized.jar`;
+    const regex = new RegExp(pattern);
+    const dir = path.join(base, project, build);
+    const files = fs.readdirSync(dir);
+    const matchingFiles = files.filter((file) => regex.test(file)).sort();
+    const optJar = matchingFiles[matchingFiles.length - 1];
     const fullPath = path.join(base, project, build, optJar);
     return fs.readFileSync(fullPath).toString('hex')
   }

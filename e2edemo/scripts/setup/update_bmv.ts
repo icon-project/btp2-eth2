@@ -4,11 +4,10 @@ import {chainType, Deployments} from "./config";
 import {Contract, Jar} from "../icon";
 import fs from "fs";
 
-const {JAVASCORE_PATH, PWD, SWITCH_BMV} = process.env
+const {JAVASCORE_PATH, PWD, SWITCH_BMV, BMV_VERSION} = process.env
 const ETH2_BMV_INIT_PATH= `${PWD}/java_bmv_init_data.json`
 const switchMode= SWITCH_BMV == "true";
 const deployments = Deployments.getDefault();
-const bmv_version = "0.3.0"
 
 async function manage_btp_verifier(src: string, srcChain: any, dstChain: any, add: boolean) {
   const srcNetwork = IconNetwork.getNetwork(src);
@@ -37,7 +36,7 @@ async function manage_btp_verifier(src: string, srcChain: any, dstChain: any, ad
 
 async function deploy_bmv_eth2_java_with_seq(srcNetwork: IconNetwork, srcChain: any, dstChain: any) {
   const bmvInitData = JSON.parse(fs.readFileSync(ETH2_BMV_INIT_PATH).toString());
-  const content = Jar.readFromFile(JAVASCORE_PATH, "bmv/eth2", bmv_version);
+  const content = Jar.readFromFile(JAVASCORE_PATH, "bmv/eth2", BMV_VERSION);
   const bmc = new BMC(srcNetwork, srcChain.contracts.bmc);
   const bmv = new Contract(srcNetwork)
 
@@ -47,7 +46,7 @@ async function deploy_bmv_eth2_java_with_seq(srcNetwork: IconNetwork, srcChain: 
     throw new Error(`bmvInitData and bmcStatus do not match`)
   }
 
-  console.log(`deploy java BMV ${bmv_version} with slot:${bmvInitData.slot} seq:${bmcStatus.rx_seq}`)
+  console.log(`deploy java BMV ${BMV_VERSION} with slot:${bmvInitData.slot} seq:${bmcStatus.rx_seq}`)
 
   const deployTxHash = await bmv.deploy({
     content: content,
@@ -70,10 +69,10 @@ async function deploy_bmv_eth2_java_with_seq(srcNetwork: IconNetwork, srcChain: 
   console.log(`${srcChain.network}: BMV-eth2: deployed to ${bmv.address}`);
 }
 
-async function update_bmv_eth2_java(srcNetwork: IconNetwork, srcChain: any, dstChain: any, to?: string) {
-  const content = Jar.readFromFile(JAVASCORE_PATH, "bmv/eth2", bmv_version);
+async function update_bmv_eth2_java(srcNetwork: IconNetwork, srcChain: any, dstChain: any, to: string) {
+  const content = Jar.readFromFile(JAVASCORE_PATH, "bmv/eth2", BMV_VERSION);
   const bmv = new Contract(srcNetwork)
-  console.log(`${srcChain.network}: BMV-eth2: updated to ${bmv.address}`);
+  console.log(`${srcChain.network}: BMV-eth2: updated to ${to}`);
   const deployTxHash = await bmv.deploy({
     content: content,
     to: to,

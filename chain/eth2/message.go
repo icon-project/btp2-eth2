@@ -18,6 +18,7 @@ package eth2
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	ssz "github.com/ferranbt/fastssz"
@@ -232,12 +233,37 @@ func (b *blockUpdateData) RLPDecodeSelf(d codec.Decoder) error {
 	if err != nil {
 		return err
 	}
-	b.NextSyncCommittee = new(lightclient.SyncCommittee)
-	err = b.NextSyncCommittee.UnmarshalSSZ(nsc)
-	if err != nil {
-		return err
+	if nsc != nil {
+		b.NextSyncCommittee = new(lightclient.SyncCommittee)
+		err = b.NextSyncCommittee.UnmarshalSSZ(nsc)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func (b *blockUpdateData) Format(f fmt.State, c rune) {
+	switch c {
+	case 'v':
+		if f.Flag('+') {
+			fmt.Fprintf(f, "blockUpdateData{AttestedHeader:%+v FinalizedHeader:%+v FinalizedHeaderBranch:%+v "+
+				"SignatureSlot:%+v SyncAggregate:%+v NextSyncCommittee:%+v NextSyncCommitteeBranch:%+v}",
+				b.AttestedHeader, b.FinalizedHeader, b.FinalizedHeaderBranch, b.SignatureSlot,
+				b.SyncAggregate, b.NextSyncCommittee, b.NextSyncCommitteeBranch)
+		} else {
+			fmt.Fprintf(f, "blockUpdateData{%v %v %v %v %v %v %v}",
+				b.AttestedHeader, b.FinalizedHeader, b.FinalizedHeaderBranch, b.SignatureSlot,
+				b.SyncAggregate, b.NextSyncCommittee, b.NextSyncCommitteeBranch)
+		}
+	case 's':
+		data, err := json.Marshal(b)
+		if err != nil {
+			fmt.Fprintf(f, "ERR: %v", err)
+			return
+		}
+		fmt.Fprintf(f, "%s", string(data))
+	}
 }
 
 type blockProofData struct {
@@ -400,4 +426,12 @@ func (b *BMVExtra) Format(f fmt.State, c rune) {
 			fmt.Fprintf(f, "BMVExtra{%d %d)", b.LastMsgSeq, b.LastMsgSlot)
 		}
 	}
+}
+
+func BranchToHashes(branch []common.HexBytes) [][]byte {
+	r := make([][]byte, 0)
+	for i, b := range branch {
+		r[i] = b[:]
+	}
+	return r
 }
