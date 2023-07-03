@@ -492,6 +492,14 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Debugf("skip already processed finality update")
 				return
 			}
+			fu, err := r.cl.LightClientFinalityUpdate()
+			if err != nil {
+				r.l.Panicf("failed to get Finality Update. %+v", err)
+			}
+			if fu.FinalizedHeader.Beacon.Slot > update.FinalizedHeader.Beacon.Slot {
+				r.l.Debugf("skip old finality update. Maybe it is due to undelivered message processing")
+				return
+			}
 			if err := validateFinalityUpdate(update); err != nil {
 				r.l.Debugf("invalid finality update. %v", err)
 				return
