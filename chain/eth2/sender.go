@@ -59,7 +59,7 @@ func (r *request) RelayMessage() types.RelayMessage {
 	return r.rm
 }
 
-func (r *request) ID() int {
+func (r *request) ID() string {
 	return r.rm.Id()
 }
 
@@ -94,7 +94,7 @@ func (r *request) Format(f fmt.State, c rune) {
 type sender struct {
 	src  types.BtpAddress
 	dst  types.BtpAddress
-	w    wallet.Wallet
+	w    types.Wallet
 	l    log.Logger
 	sc   chan *types.RelayResult
 	reqs []*request
@@ -105,7 +105,7 @@ type sender struct {
 	bmc *client.BMCClient
 }
 
-func NewSender(src, dst types.BtpAddress, w wallet.Wallet, endpoint string, opt map[string]interface{}, l log.Logger) types.Sender {
+func newSender(src, dst types.BtpAddress, w types.Wallet, endpoint string, opt map[string]interface{}, l log.Logger) types.Sender {
 	var err error
 	s := &sender{
 		src: src,
@@ -144,7 +144,7 @@ func (s *sender) GetStatus() (*types.BMCLinkStatus, error) {
 	return s.getStatus(0)
 }
 
-func (s *sender) Relay(rm types.RelayMessage) (int, error) {
+func (s *sender) Relay(rm types.RelayMessage) (string, error) {
 	if tx, err := s.relay(rm); err != nil {
 		return rm.Id(), err
 	} else {
@@ -163,12 +163,15 @@ func (s *sender) relay(rm types.RelayMessage) (*etypes.Transaction, error) {
 	return s.bmc.HandleRelayMessage(t, s.src.String(), rm.Bytes())
 }
 
-func (s *sender) GetMarginForLimit() int64 {
-	return 0
-}
+func (s *sender) GetPreference() types.Preference {
+	p := types.Preference{
+		TxSizeLimit:       int64(txSizeLimit),
+		MarginForLimit:    int64(0),
+		LatestResult:      false,
+		FilledBlockUpdate: false,
+	}
 
-func (s *sender) TxSizeLimit() int {
-	return txSizeLimit
+	return p
 }
 
 func (s *sender) addRequest(req *request) {
@@ -178,7 +181,7 @@ func (s *sender) addRequest(req *request) {
 	s.reqs = append(s.reqs, req)
 }
 
-func (s *sender) removeRequest(id int) {
+func (s *sender) removeRequest(id string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	for i, req := range s.reqs {
