@@ -87,10 +87,10 @@ func main() {
 			return nil
 		},
 	}
-	rootCmd.AddCommand(genCMD)
 	genCMD.Flags().String("url", "http://20.20.5.191:9596", "URL of Beacon node API")
 	genCMD.Flags().String("output", "./bmv_init_data.json", "Output file name")
 	genCMD.Flags().String("block-id", "finalized", "Block ID")
+	rootCmd.AddCommand(genCMD)
 
 	decCMD := &cobra.Command{
 		Use:   "dec [file]",
