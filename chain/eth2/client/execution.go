@@ -63,6 +63,7 @@ func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey) (*bind.TransactOpt
 		rewards.Add(rewards, r[0])
 	}
 	txo.GasTipCap = rewards.Div(rewards, big.NewInt(int64(len(fh.Reward))))
+	txo.GasLimit = DefaultGasLimit
 
 	return txo, nil
 }
