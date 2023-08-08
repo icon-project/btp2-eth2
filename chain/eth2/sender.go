@@ -84,9 +84,9 @@ func (r *request) Format(f fmt.State, c rune) {
 	switch c {
 	case 'v', 's':
 		if f.Flag('+') {
-			fmt.Fprintf(f, "request{id=%d txHash=%#x txPendingCount=%d)", r.ID(), r.txHash, r.txPendingCount)
+			fmt.Fprintf(f, "request{id=%s txHash=%#x txPendingCount=%d)", r.ID(), r.txHash, r.txPendingCount)
 		} else {
-			fmt.Fprintf(f, "request{%d %#x %d)", r.ID(), r.txHash, r.txPendingCount)
+			fmt.Fprintf(f, "request{%s %#x %d)", r.ID(), r.txHash, r.txPendingCount)
 		}
 	}
 }
@@ -154,7 +154,7 @@ func (s *sender) Relay(rm types.RelayMessage) (string, error) {
 }
 
 func (s *sender) relay(rm types.RelayMessage) (*etypes.Transaction, error) {
-	s.l.Debugf("relay src address:%s rm id:%d", s.src.String(), rm.Id())
+	s.l.Debugf("relay src address:%s rm id:%s", s.src.String(), rm.Id())
 	t, err := s.el.NewTransactOpts(s.w.(*wallet.EvmWallet).Skey)
 	if err != nil {
 		return nil, err
@@ -243,9 +243,9 @@ func (s *sender) checkRelayResult(to uint64) {
 		if pending {
 			s.l.Debugf("TX %#x is not yet executed.", req.TxHash())
 			if req.IncTxPendingCount() == txPendingMAX {
-				s.l.Debugf("resend rm %d", req.ID())
+				s.l.Debugf("resend rm %s", req.ID())
 				if tx, err := s.relay(req.RelayMessage()); err != nil {
-					s.l.Errorf("fail to resend relay message %d", req.ID())
+					s.l.Errorf("fail to resend relay message %s", req.ID())
 				} else {
 					req.SetTxHash(tx.Hash())
 					req.SetTxPendingCount(0)
