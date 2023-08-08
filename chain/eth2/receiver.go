@@ -83,7 +83,7 @@ type receiver struct {
 	el     *client.ExecutionLayer
 	bmc    *client.BMC
 	nid    int64
-	rsc    chan link.ReceiveStatus
+	rsc    chan interface{}
 	seq    int64
 	prevRS *receiveStatus
 	rss    []*receiveStatus
@@ -93,13 +93,13 @@ type receiver struct {
 	cp     map[int64]*phase0.BeaconBlockHeader // save checkpoint to validate gathered mps
 }
 
-func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]interface{}, l log.Logger) link.Receiver {
+func newReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]interface{}, l log.Logger) link.Receiver {
 	var err error
 	r := &receiver{
 		src: src,
 		dst: dst,
 		l:   l,
-		rsc: make(chan link.ReceiveStatus),
+		rsc: make(chan interface{}),
 		rss: make([]*receiveStatus, 0),
 		fq: &ethereum.FilterQuery{
 			Addresses: []common.Address{common.HexToAddress(src.ContractAddress())},
@@ -125,7 +125,7 @@ func NewReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 	return r
 }
 
-func (r *receiver) Start(bls *types.BMCLinkStatus) (<-chan link.ReceiveStatus, error) {
+func (r *receiver) Start(bls *types.BMCLinkStatus) (<-chan interface{}, error) {
 	r.l.Debugf("Start eth2 receiver with BMCLinkStatus %+v", bls)
 
 	go func() {
