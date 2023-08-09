@@ -84,9 +84,9 @@ func (r *request) Format(f fmt.State, c rune) {
 	switch c {
 	case 'v', 's':
 		if f.Flag('+') {
-			fmt.Fprintf(f, "request{id=%d txHash=%#x txPendingCount=%d)", r.ID(), r.txHash, r.txPendingCount)
+			fmt.Fprintf(f, "request{id=%s txHash=%#x txPendingCount=%d)", r.ID(), r.txHash, r.txPendingCount)
 		} else {
-			fmt.Fprintf(f, "request{%d %#x %d)", r.ID(), r.txHash, r.txPendingCount)
+			fmt.Fprintf(f, "request{%s %#x %d)", r.ID(), r.txHash, r.txPendingCount)
 		}
 	}
 }
@@ -103,6 +103,8 @@ type sender struct {
 	cl  *client.ConsensusLayer
 	el  *client.ExecutionLayer
 	bmc *client.BMCClient
+
+	gasLimit uint64
 }
 
 func newSender(src, dst types.BtpAddress, w types.Wallet, endpoint string, opt map[string]interface{}, l log.Logger) types.Sender {
@@ -118,15 +120,20 @@ func newSender(src, dst types.BtpAddress, w types.Wallet, endpoint string, opt m
 	if err != nil {
 		l.Panicf("fail to connect to %s, %v", endpoint, err)
 	}
-	s.cl, err = client.NewConsensusLayer(opt["consensus_endpoint"].(string), l)
-	if err != nil {
-		l.Panicf("fail to connect to %s, %v", opt["consensus_endpoint"].(string), err)
+	l.Debugf("Sender options %+v", opt)
+	if clEndpoint, ok := opt["consensus_endpoint"].(string); ok {
+		s.cl, err = client.NewConsensusLayer(clEndpoint, l)
+		if err != nil {
+			l.Panicf("fail to connect to %s, %v", clEndpoint, err)
+		}
 	}
 	txUrl, _ := opt["execution_tx_endpoint"].(string)
 	s.bmc, err = client.NewBMCClient(common.HexToAddress(s.dst.ContractAddress()), s.el.GetBackend(), txUrl, l)
 	if err != nil {
 		l.Panicf("fail to connect to BMC %s, %v", s.dst.ContractAddress(), err)
 	}
+	gasLimit, _ := opt["gas_limit"].(float64)
+	s.gasLimit = uint64(gasLimit)
 	return s
 }
 
@@ -154,8 +161,8 @@ func (s *sender) Relay(rm types.RelayMessage) (string, error) {
 }
 
 func (s *sender) relay(rm types.RelayMessage) (*etypes.Transaction, error) {
-	s.l.Debugf("relay src address:%s rm id:%d", s.src.String(), rm.Id())
-	t, err := s.el.NewTransactOpts(s.w.(*wallet.EvmWallet).Skey)
+	s.l.Debugf("relay src address:%s rm id:%s", s.src.String(), rm.Id())
+	t, err := s.el.NewTransactOpts(s.w.(*wallet.EvmWallet).Skey, s.gasLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -243,9 +250,9 @@ func (s *sender) checkRelayResult(to uint64) {
 		if pending {
 			s.l.Debugf("TX %#x is not yet executed.", req.TxHash())
 			if req.IncTxPendingCount() == txPendingMAX {
-				s.l.Debugf("resend rm %d", req.ID())
+				s.l.Debugf("resend rm %s", req.ID())
 				if tx, err := s.relay(req.RelayMessage()); err != nil {
-					s.l.Errorf("fail to resend relay message %d", req.ID())
+					s.l.Errorf("fail to resend relay message %s", req.ID())
 				} else {
 					req.SetTxHash(tx.Hash())
 					req.SetTxPendingCount(0)

@@ -40,24 +40,54 @@ else
 fi
 DST_OPTIONS=$(cat ${CHAIN_CONFIG} | jq -r '.chains.'${DST}'.options // empty')
 
+SRC_NETWORK_NAME=$(echo ${SRC_NETWORK} | cut -d. -f2)
+DST_NETWORK_NAME=$(echo ${DST_NETWORK} | cut -d. -f2)
+# Assume src is always an ICON chain
+if [ $SRC_NETWORK_NAME != icon ]; then
+  echo "Source network is not an ICON-compatible chain: $SRC_NETWORK_NAME"
+  exit 1
+fi
+# Determine src type
 if [ "x$BMV_BRIDGE" = xtrue ]; then
   echo "Using Bridge mode"
+  SRC_TYPE="icon-bridge"
 else
   echo "Using BTPBlock mode"
-  BMV_BRIDGE=false
+  SRC_TYPE="icon-btpblock"
+fi
+# Determine dst type
+if [ $DST_NETWORK_NAME == icon ]; then
+  DST_TYPE="icon-btpblock"
+else
+  DST_TYPE="eth2-v2.0"
 fi
 
+get_config() {
+  if [ $# -gt 5 -a ${#6} -gt 0 ]; then
+    echo '{
+      "address": "'$1'",
+      "endpoint": "'$2'",
+      "key_store": "'$3'",
+      "key_password": "'$4'",
+      "type": "'$5'",
+      "options": '$6'
+    }' | tr -d [:space:]
+  else
+    echo '{
+      "address": "'$1'",
+      "endpoint": "'$2'",
+      "key_store": "'$3'",
+      "key_password": "'$4'",
+      "type": "'$5'"
+    }' | tr -d [:space:]
+  fi
+}
+SRC_CONFIG=$(get_config "$SRC_ADDRESS" "$SRC_ENDPOINT" "$SRC_KEY_STORE" "$SRC_KEY_PASSWORD" "$SRC_TYPE" "$SRC_OPTIONS")
+DST_CONFIG=$(get_config "$DST_ADDRESS" "$DST_ENDPOINT" "$DST_KEY_STORE" "$DST_KEY_PASSWORD" "$DST_TYPE" "$DST_OPTIONS")
+
 ${RELAY_BIN} \
+    --base_dir .relay \
     --direction both \
-    --src.address ${SRC_ADDRESS} \
-    --src.endpoint ${SRC_ENDPOINT} \
-    --src.key_store ${SRC_KEY_STORE} \
-    --src.key_password ${SRC_KEY_PASSWORD} \
-    --src.bridge_mode=${BMV_BRIDGE} \
-    ${SRC_OPTIONS:+--dst.options $SRC_OPTIONS} \
-    --dst.address ${DST_ADDRESS} \
-    --dst.endpoint ${DST_ENDPOINT} \
-    --dst.key_store ${DST_KEY_STORE} \
-    --dst.key_password ${DST_KEY_PASSWORD} \
-    ${DST_OPTIONS:+--dst.options $DST_OPTIONS} \
+    --src_config ${SRC_CONFIG} \
+    --dst_config ${DST_CONFIG} \
     start
