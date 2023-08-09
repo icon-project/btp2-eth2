@@ -107,7 +107,7 @@ type sender struct {
 	gasLimit uint64
 }
 
-func newSender(src, dst types.BtpAddress, w types.Wallet, endpoint string, opt map[string]interface{}, l log.Logger) types.Sender {
+func newSender(src, dst types.BtpAddress, w types.Wallet, endpoint string, opt map[string]interface{}, baseDir string, l log.Logger) types.Sender {
 	var err error
 	s := &sender{
 		src: src,
