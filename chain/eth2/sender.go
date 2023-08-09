@@ -103,6 +103,8 @@ type sender struct {
 	cl  *client.ConsensusLayer
 	el  *client.ExecutionLayer
 	bmc *client.BMCClient
+
+	gasLimit uint64
 }
 
 func newSender(src, dst types.BtpAddress, w types.Wallet, endpoint string, opt map[string]interface{}, l log.Logger) types.Sender {
@@ -118,15 +120,20 @@ func newSender(src, dst types.BtpAddress, w types.Wallet, endpoint string, opt m
 	if err != nil {
 		l.Panicf("fail to connect to %s, %v", endpoint, err)
 	}
-	s.cl, err = client.NewConsensusLayer(opt["consensus_endpoint"].(string), l)
-	if err != nil {
-		l.Panicf("fail to connect to %s, %v", opt["consensus_endpoint"].(string), err)
+	l.Debugf("Sender options %+v", opt)
+	if clEndpoint, ok := opt["consensus_endpoint"].(string); ok {
+		s.cl, err = client.NewConsensusLayer(clEndpoint, l)
+		if err != nil {
+			l.Panicf("fail to connect to %s, %v", clEndpoint, err)
+		}
 	}
 	txUrl, _ := opt["execution_tx_endpoint"].(string)
 	s.bmc, err = client.NewBMCClient(common.HexToAddress(s.dst.ContractAddress()), s.el.GetBackend(), txUrl, l)
 	if err != nil {
 		l.Panicf("fail to connect to BMC %s, %v", s.dst.ContractAddress(), err)
 	}
+	gasLimit, _ := opt["gas_limit"].(float64)
+	s.gasLimit = uint64(gasLimit)
 	return s
 }
 
@@ -155,7 +162,7 @@ func (s *sender) Relay(rm types.RelayMessage) (string, error) {
 
 func (s *sender) relay(rm types.RelayMessage) (*etypes.Transaction, error) {
 	s.l.Debugf("relay src address:%s rm id:%s", s.src.String(), rm.Id())
-	t, err := s.el.NewTransactOpts(s.w.(*wallet.EvmWallet).Skey)
+	t, err := s.el.NewTransactOpts(s.w.(*wallet.EvmWallet).Skey, s.gasLimit)
 	if err != nil {
 		return nil, err
 	}

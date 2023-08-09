@@ -47,7 +47,7 @@ func (c *ExecutionLayer) GetBackend() bind.ContractBackend {
 	return c.client
 }
 
-func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
+func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey, gasLimit uint64) (*bind.TransactOpts, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
 	defer cancel()
 	txo, err := bind.NewKeyedTransactorWithChainID(k, c.chainID)
@@ -63,7 +63,11 @@ func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey) (*bind.TransactOpt
 		rewards.Add(rewards, r[0])
 	}
 	txo.GasTipCap = rewards.Div(rewards, big.NewInt(int64(len(fh.Reward))))
-	txo.GasLimit = DefaultGasLimit
+	if gasLimit != 0 {
+		txo.GasLimit = gasLimit
+	} else {
+		txo.GasLimit = DefaultGasLimit
+	}
 
 	return txo, nil
 }
