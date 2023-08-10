@@ -22,8 +22,8 @@ import (
 	"github.com/icon-project/btp2-eth2/chain/eth2/proof"
 )
 
-func newReceiver(src, dest types.BtpAddress) *receiver {
-	r := NewReceiver(
+func newTestReceiver(src, dest types.BtpAddress) *receiver {
+	r := newReceiver(
 		src,
 		dest,
 		"https://sepolia.infura.io/v3/ffbf8ebe228f4758ae82e175640275e0",
@@ -36,7 +36,7 @@ func newReceiver(src, dest types.BtpAddress) *receiver {
 }
 
 func TestReceiver_BlockUpdate(t *testing.T) {
-	r := newReceiver(
+	r := newTestReceiver(
 		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
 		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
 	)
@@ -113,7 +113,7 @@ func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
 }
 
 func TestReceiver_BlockProof(t *testing.T) {
-	r := newReceiver(
+	r := newTestReceiver(
 		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
 		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
 	)
@@ -216,7 +216,7 @@ func TestReceiver_BlockProof(t *testing.T) {
 
 func TestReceiver_MessageProof(t *testing.T) {
 	slot := int64(2091171)
-	r := newReceiver(
+	r := newTestReceiver(
 		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
 		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
 	)

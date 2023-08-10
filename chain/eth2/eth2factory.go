@@ -40,14 +40,14 @@ func NewReceiver(srcCfg link.ChainConfig, dstAddr types.BtpAddress, baseDir stri
 	return newReceiver(srcCfg.GetAddress(), dstAddr, src.Endpoint, src.Options, l), nil
 }
 
-func NewSender(srcAddr types.BtpAddress, dstCfg link.ChainConfig, l log.Logger) (types.Sender, error) {
+func NewSender(srcAddr types.BtpAddress, dstCfg link.ChainConfig, baseDir string, l log.Logger) (types.Sender, error) {
 	dst := dstCfg.(chain.BaseConfig)
 	w, err := newWallet(dst.KeyStorePass, dst.KeySecret, dst.KeyStore)
 	if err != nil {
 		return nil, err
 	}
 
-	return newSender(srcAddr, dst.Address, w, dst.Endpoint, dst.Options, l), nil
+	return newSender(srcAddr, dst.Address, w, dst.Endpoint, dst.Options, baseDir, l), nil
 }
 
 func newWallet(passwd, secret string, keyStorePath string) (types.Wallet, error) {

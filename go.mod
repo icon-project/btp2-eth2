@@ -8,7 +8,7 @@ require (
 	github.com/attestantio/go-eth2-client v0.0.0-00010101000000-000000000000
 	github.com/ethereum/go-ethereum v1.11.3
 	github.com/ferranbt/fastssz v0.1.3
-	github.com/icon-project/btp2 v1.0.5
+	github.com/icon-project/btp2 v1.0.6
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1
@@ -67,7 +67,7 @@ require (
 	github.com/nsf/termbox-go v0.0.0-20190325093121-288510b9734e // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pelletier/go-toml v1.9.3 // indirect
-	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
