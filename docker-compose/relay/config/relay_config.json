@@ -1,37 +1,41 @@
 {
-  "base_dir": ".",
-  "direction": "both",
-  "maxSizeTx": false,
-  "offset": 0,
-  "src": {
-    "address": "btp://0x42.icon/cxa1bc80591b5e3d29c136648c477f37c609d1f5dc",
-    "endpoint": "http://icon-node/api/v3/icon_dex",
-    "key_store": "/keystore/icon/keystore.json",
-    "key_password": "gochain"
-  },
-  "dst": {
-    "address": "btp://0xaa36a7.eth/0x8a284bac195a600e26462bfE3A08390eCC100579",
-    "endpoint": "http://execution-endpoint:8545",
-    "key_store": "/keystore/hardhat/keystore.json",
-    "key_password": "hardhat",
-    "options": {
-      "consensus_endpoint": "http://consensus-endpoint:9596"
+  "relay_config": {
+    "base_dir": ".",
+    "direction": "both",
+    "log_level": "trace",
+    "console_level": "trace",
+    "log_forwarder": {
+      "vendor": "",
+      "address": "",
+      "level": "trace",
+      "name": ""
+    },
+    "log_writer": {
+      "filename": "./log",
+      "maxsize": 100,
+      "maxage": 0,
+      "maxbackups": 0,
+      "localtime": false,
+      "compress": false
     }
   },
-  "log_level": "trace",
-  "console_level": "trace",
-  "log_forwarder": {
-    "vendor": "",
-    "address": "",
-    "level": "trace",
-    "name": ""
-  },
-  "log_writer": {
-    "filename": "/data/log",
-    "maxsize": 100,
-    "maxage": 0,
-    "maxbackups": 0,
-    "localtime": false,
-    "compress": false
+  "chains_config": {
+    "src": {
+      "address": "btp://0x42.icon/cxa1bc80591b5e3d29c136648c477f37c609d1f5dc",
+      "endpoint": "http://icon-node/api/v3/icon_dex",
+      "key_store": "/keystore/icon/keystore.json",
+      "key_password": "gochain"
+      "type": "icon-btpblock"
+    },
+    "dst": {
+      "address": "btp://0xaa36a7.eth/0x8a284bac195a600e26462bfE3A08390eCC100579",
+      "endpoint": "http://execution-endpoint:8545",
+      "key_store": "/keystore/hardhat/keystore.json",
+      "key_password": "hardhat",
+      "options": {
+        "consensus_endpoint": "http://consensus-endpoint:9596"
+      },
+      "type": "eth2-v2.0"
+    }
   }
 }
