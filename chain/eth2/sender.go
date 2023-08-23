@@ -283,31 +283,37 @@ func (s *sender) sendRelayResult(id string, errCode errors.Code, finalized bool)
 }
 
 func (s *sender) checkRelayResult(to uint64) {
-	finished := make([]*request, 0)
+	finished := s._checkRelayResult(to)
+	s._removeRequests(finished)
+}
+
+func (s *sender) _checkRelayResult(to uint64) (finished []*request) {
+	finished = make([]*request, 0)
 	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 	for _, req := range s.reqs {
 		_, pending, err := s.el.TransactionByHash(req.TxHash)
 		if err != nil {
 			s.l.Errorf("can't get TX via rpc. %+v. Drop %+v.", err, req)
 			s.sendRelayResult(req.ID(), errors.BMVUnknown, false)
-			break
+			return
 		}
 		if pending {
 			if req.IsExpired() {
 				s.l.Errorf("request is still pending. Drop %+v.", req)
 				s.sendRelayResult(req.ID(), errors.BMVUnknown, false)
-				break
 			}
+			return
 		}
 		receipt, err := s.el.TransactionReceipt(req.TxHash)
 		if err != nil {
 			s.l.Errorf("can't get TX receipt. %+v. Drop %+v.", err, req)
 			s.sendRelayResult(req.ID(), errors.BMVUnknown, false)
-			break
+			return
 		}
 		if to < receipt.BlockNumber.Uint64() {
 			s.l.Debugf("%#x is not yet finalized", req.TxHash)
-			break
+			return
 		}
 		err = s.receiptToRevertError(receipt)
 		errCode := errors.SUCCESS
@@ -324,9 +330,11 @@ func (s *sender) checkRelayResult(to uint64) {
 		s.sendRelayResult(req.ID(), errCode, true)
 		finished = append(finished, req)
 	}
-	s.mtx.RUnlock()
+	return
+}
 
-	for _, req := range finished {
+func (s *sender) _removeRequests(requests []*request) {
+	for _, req := range requests {
 		s.removeRequest(req.ID())
 	}
 }
