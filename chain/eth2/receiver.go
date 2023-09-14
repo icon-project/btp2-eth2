@@ -538,7 +538,7 @@ func validateFinalityUpdate(u *altair.LightClientFinalityUpdate) error {
 		return errors.Errorf("invalid slot. attested header >= signature")
 	}
 
-	if u.SyncAggregate.SyncCommitteeBits.Count()*3 < u.SyncAggregate.SyncCommitteeBits.Len() {
+	if u.SyncAggregate.SyncCommitteeBits.Count()*3 < u.SyncAggregate.SyncCommitteeBits.Len()*2 {
 		return errors.Errorf("not enough SyncAggregate participants")
 	}
 
