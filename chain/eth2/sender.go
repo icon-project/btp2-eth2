@@ -189,8 +189,12 @@ func (s *sender) relay(rm types.RelayMessage) (*etypes.Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return s.bmc.HandleRelayMessage(t, s.src.String(), rm.Bytes())
+	tx, err := s.bmc.HandleRelayMessage(t, s.src.String(), rm.Bytes())
+	if err != nil {
+		s.l.Debugf("TX failed with opt:%+v", t)
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (s *sender) GetPreference() types.Preference {
