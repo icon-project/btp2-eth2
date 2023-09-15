@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"strconv"
 	"sync"
+	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -48,6 +49,8 @@ import (
 
 const (
 	eventSignature = "Message(string,uint256,bytes)"
+
+	maxFinalityUpdateRetry = 5
 )
 
 type receiveStatus struct {
@@ -492,6 +495,8 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Debugf("skip already processed finality update")
 				return
 			}
+			retry := 0
+		readFinalityUpdate:
 			fu, err := r.cl.LightClientFinalityUpdate()
 			if err != nil {
 				r.l.Panicf("failed to get Finality Update. %+v", err)
@@ -500,9 +505,17 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Debugf("skip old finality update. Maybe it is due to undelivered message processing")
 				return
 			}
-			if err := validateFinalityUpdate(update); err != nil {
+			// update with new value
+			update = fu
+			if err = validateFinalityUpdate(update); err != nil {
 				r.l.Debugf("invalid finality update. %v", err)
-				return
+				if retry < maxFinalityUpdateRetry {
+					time.Sleep(blockInterval + time.Second)
+					retry++
+					goto readFinalityUpdate
+				} else {
+					return
+				}
 			}
 			buds, err := r.makeBlockUpdateDatas(bls, update)
 			if err != nil {
