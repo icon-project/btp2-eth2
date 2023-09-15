@@ -512,8 +512,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				if retry < maxFinalityUpdateRetry {
 					time.Sleep(blockInterval + time.Second)
 					retry++
+					r.l.Debugf("retry reading Finality Update. %d", retry)
 					goto readFinalityUpdate
 				} else {
+					r.l.Debugf("skip this Finality Update(slot:%d)", slot)
 					return
 				}
 			}
