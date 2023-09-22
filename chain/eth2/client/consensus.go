@@ -11,7 +11,7 @@ import (
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/http"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/icon-project/btp2/common/errors"
 	"github.com/icon-project/btp2/common/log"
@@ -55,19 +55,19 @@ func (c *ConsensusLayer) Events(topics []string, handler eth2client.EventHandler
 	return c.service.(eth2client.EventsProvider).Events(c.ctx, topics, handler)
 }
 
-func (c *ConsensusLayer) LightClientBootstrap(blockRoot phase0.Root) (*altair.LightClientBootstrap, error) {
+func (c *ConsensusLayer) LightClientBootstrap(blockRoot phase0.Root) (*capella.LightClientBootstrap, error) {
 	return c.service.(*http.Service).LightClientBootstrap(c.ctx, blockRoot)
 }
 
-func (c *ConsensusLayer) LightClientUpdates(startPeriod, count uint64) ([]*altair.LightClientUpdate, error) {
+func (c *ConsensusLayer) LightClientUpdates(startPeriod, count uint64) ([]*capella.LightClientUpdate, error) {
 	return c.service.(*http.Service).LightClientUpdates(c.ctx, startPeriod, count)
 }
 
-func (c *ConsensusLayer) LightClientOptimisticUpdate() (*altair.LightClientOptimisticUpdate, error) {
+func (c *ConsensusLayer) LightClientOptimisticUpdate() (*capella.LightClientOptimisticUpdate, error) {
 	return c.service.(*http.Service).LightClientOptimisticUpdate(c.ctx)
 }
 
-func (c *ConsensusLayer) LightClientFinalityUpdate() (*altair.LightClientFinalityUpdate, error) {
+func (c *ConsensusLayer) LightClientFinalityUpdate() (*capella.LightClientFinalityUpdate, error) {
 	return c.service.(*http.Service).LightClientFinalityUpdate(c.ctx)
 }
 
