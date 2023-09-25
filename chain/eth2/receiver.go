@@ -27,6 +27,7 @@ import (
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -437,7 +438,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	r.l.Debugf("Start ethereum monitoring")
 	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
 		if event.Topic == client.TopicLCOptimisticUpdate {
-			update := event.Data.(*altair.LightClientOptimisticUpdate)
+			update := event.Data.(*capella.LightClientOptimisticUpdate)
 			slot := int64(update.AttestedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client optimistic update. slot:%d", slot)
 			once.Do(func() {
@@ -488,7 +489,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			}
 			r.addCheckPoint(update.AttestedHeader.Beacon)
 		} else if event.Topic == client.TopicLCFinalityUpdate {
-			update := event.Data.(*altair.LightClientFinalityUpdate)
+			update := event.Data.(*capella.LightClientFinalityUpdate)
 			slot := int64(update.FinalizedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client finality update. slot:%d", slot)
 			if bls.Verifier.Height >= slot {
@@ -545,7 +546,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	return nil
 }
 
-func validateFinalityUpdate(u *altair.LightClientFinalityUpdate) error {
+func validateFinalityUpdate(u *capella.LightClientFinalityUpdate) error {
 	if u.FinalizedHeader.Beacon.Slot > u.AttestedHeader.Beacon.Slot {
 		return errors.Errorf("invalid slot. finalized header > attested header")
 	}
@@ -576,7 +577,7 @@ func validateFinalityUpdate(u *altair.LightClientFinalityUpdate) error {
 
 func (r *receiver) makeBlockUpdateDatas(
 	bls *types.BMCLinkStatus,
-	update *altair.LightClientFinalityUpdate,
+	update *capella.LightClientFinalityUpdate,
 ) ([]*blockUpdateData, error) {
 	var nsc *altair.SyncCommittee
 	var nscBranch [][]byte
@@ -592,8 +593,8 @@ func (r *receiver) makeBlockUpdateDatas(
 		for _, lcu := range lcUpdate {
 			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", SlotToSyncCommitteePeriod(lcu.SignatureSlot))
 			bud := &blockUpdateData{
-				AttestedHeader:          lcu.AttestedHeader,
-				FinalizedHeader:         lcu.FinalizedHeader,
+				AttestedHeader:          lcu.AttestedHeader.ToAltair(),
+				FinalizedHeader:         lcu.FinalizedHeader.ToAltair(),
 				FinalizedHeaderBranch:   lcu.FinalityBranch,
 				SyncAggregate:           lcu.SyncAggregate,
 				SignatureSlot:           lcu.SignatureSlot,
@@ -618,8 +619,8 @@ func (r *receiver) makeBlockUpdateDatas(
 	// append blockUpdateData made by FinalityUpdate
 	r.l.Debugf("make blockUpdateData for finality update")
 	bud := &blockUpdateData{
-		AttestedHeader:          update.AttestedHeader,
-		FinalizedHeader:         update.FinalizedHeader,
+		AttestedHeader:          update.AttestedHeader.ToAltair(),
+		FinalizedHeader:         update.FinalizedHeader.ToAltair(),
 		FinalizedHeaderBranch:   update.FinalityBranch,
 		SyncAggregate:           update.SyncAggregate,
 		SignatureSlot:           update.SignatureSlot,
@@ -639,7 +640,7 @@ func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) (
 		if bh == nil || err != nil {
 			continue
 		}
-		mp, err := r.makeMessageProofData(&altair.LightClientHeader{Beacon: bh.Header.Message})
+		mp, err := r.makeMessageProofData(&capella.LightClientHeader{Beacon: bh.Header.Message})
 		if err != nil {
 			return nil, err
 		}
@@ -658,12 +659,18 @@ func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) (
 	return mps, nil
 }
 
-func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *messageProofData, err error) {
+func (r *receiver) makeMessageProofData(header *capella.LightClientHeader) (mp *messageProofData, err error) {
+	var elBlockNum uint64
 	slot := int64(header.Beacon.Slot)
-	elBlockNum, err := r.cl.SlotToBlockNumber(phase0.Slot(slot))
-	if err != nil {
-		err = errors.NotFoundError.Wrapf(err, "fail to get block number")
-		return
+
+	if header.Execution == nil {
+		elBlockNum, err = r.cl.SlotToBlockNumber(phase0.Slot(slot))
+		if err != nil {
+			err = errors.NotFoundError.Wrapf(err, "fail to get block number for slot %d", slot)
+			return
+		}
+	} else {
+		elBlockNum = header.Execution.BlockNumber
 	}
 
 	bn := big.NewInt(int64(elBlockNum))
@@ -693,7 +700,7 @@ func (r *receiver) makeMessageProofData(header *altair.LightClientHeader) (mp *m
 		Slot:              slot,
 		ReceiptsRootProof: receiptsRootProof,
 		ReceiptProofs:     receiptProofs,
-		Header:            header,
+		Header:            header.ToAltair(),
 		StartSeq:          bms.Seq.Int64(),
 		EndSeq:            bme.Seq.Int64(),
 	}
@@ -846,7 +853,7 @@ func (r *receiver) addCheckPointsByRange(from, to int64) {
 	}
 }
 
-func (r *receiver) validateMessageProofData(update *altair.LightClientFinalityUpdate) error {
+func (r *receiver) validateMessageProofData(update *capella.LightClientFinalityUpdate) error {
 	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
 	invalid := false
 	r.l.Debugf("validate messageProofDatas at %d.", fSlot)

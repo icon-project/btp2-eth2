@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/ethereum/go-ethereum/common"
 	etypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
@@ -224,7 +225,7 @@ func TestReceiver_MessageProof(t *testing.T) {
 
 	bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(slot, 10))
 	assert.NoError(t, err)
-	header := &altair.LightClientHeader{
+	header := &capella.LightClientHeader{
 		Beacon: bh.Header.Message,
 	}
 
