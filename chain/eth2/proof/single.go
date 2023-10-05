@@ -40,7 +40,7 @@ func NewSingleProof(data []byte) (*SingleProof, error) {
 	ssz := &ssz.Proof{}
 	proofType := int(data[0])
 	if proofType != 0 {
-		return nil, fmt.Errorf("invalid proof type. %d", proofType)
+		return nil, fmt.Errorf("invalid proof type. %s", data)
 	}
 	dataOffset := 1
 
