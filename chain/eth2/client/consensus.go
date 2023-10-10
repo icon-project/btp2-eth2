@@ -6,6 +6,7 @@ import (
 	"io"
 	nhttp "net/http"
 	"strconv"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
@@ -20,6 +21,8 @@ import (
 const (
 	TopicLCOptimisticUpdate = "light_client_optimistic_update"
 	TopicLCFinalityUpdate   = "light_client_finality_update"
+
+	requestTimeout = 5 * time.Second
 )
 
 type ConsensusLayer struct {
@@ -122,6 +125,7 @@ func NewConsensusLayer(uri string, log log.Logger) (*ConsensusLayer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	service, err := http.New(
 		ctx,
+		http.WithTimeout(requestTimeout),
 		http.WithAddress(uri),
 		http.WithLogLevel(zerolog.WarnLevel),
 	)
