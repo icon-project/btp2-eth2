@@ -6,6 +6,7 @@ import (
 	"io"
 	nhttp "net/http"
 	"strconv"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
@@ -13,7 +14,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/icon-project/btp2/common/errors"
 	"github.com/icon-project/btp2/common/log"
 	"github.com/rs/zerolog"
 )
@@ -21,6 +21,8 @@ import (
 const (
 	TopicLCOptimisticUpdate = "light_client_optimistic_update"
 	TopicLCFinalityUpdate   = "light_client_finality_update"
+
+	requestTimeout = 5 * time.Second
 )
 
 type ConsensusLayer struct {
@@ -93,6 +95,8 @@ func (c *ConsensusLayer) GetReceiptsRootProof(slot int64) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
+// SlotToBlockNumber returns execution block number for consensus slot
+// If slot has no block, returns (0, nil).
 func (c *ConsensusLayer) SlotToBlockNumber(slot phase0.Slot) (uint64, error) {
 	var sn phase0.Slot
 	if slot == 0 {
@@ -107,10 +111,7 @@ func (c *ConsensusLayer) SlotToBlockNumber(slot phase0.Slot) (uint64, error) {
 	}
 
 	block, err := c.BeaconBlock(strconv.FormatInt(int64(sn), 10))
-	if block == nil {
-		return 0, errors.NotFoundError.Errorf("there is no block at slot %d", slot)
-	}
-	if err != nil {
+	if err != nil || block == nil {
 		return 0, err
 	}
 	return block.BlockNumber()
@@ -124,6 +125,7 @@ func NewConsensusLayer(uri string, log log.Logger) (*ConsensusLayer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	service, err := http.New(
 		ctx,
+		http.WithTimeout(requestTimeout),
 		http.WithAddress(uri),
 		http.WithLogLevel(zerolog.WarnLevel),
 	)

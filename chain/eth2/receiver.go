@@ -51,7 +51,8 @@ import (
 const (
 	eventSignature = "Message(string,uint256,bytes)"
 
-	maxFinalityUpdateRetry = 5
+	maxFinalityUpdateRetry   = 5
+	maxFilterLogsBlockNumber = uint64(128)
 )
 
 type receiveStatus struct {
@@ -93,7 +94,7 @@ type receiver struct {
 	rss    []*receiveStatus
 	mps    []*messageProofData
 	fq     *ethereum.FilterQuery
-	ht     map[int64]*ssz.Node
+	ht     map[int64]*ssz.Node                 // HistoricalSummaries Trie
 	cp     map[int64]*phase0.BeaconBlockHeader // save checkpoint to validate gathered mps
 }
 
@@ -111,8 +112,8 @@ func newReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 				{crypto.Keccak256Hash([]byte(eventSignature))},
 			},
 		},
-		ht: make(map[int64]*ssz.Node, 0),
-		cp: make(map[int64]*phase0.BeaconBlockHeader, 0),
+		ht: make(map[int64]*ssz.Node),
+		cp: make(map[int64]*phase0.BeaconBlockHeader),
 	}
 	r.el, err = client.NewExecutionLayer(endpoint, l)
 	if err != nil {
@@ -142,6 +143,45 @@ func (r *receiver) Start(bls *types.BMCLinkStatus) (<-chan interface{}, error) {
 func (r *receiver) Stop() {
 	close(r.rsc)
 	r.cl.Term()
+}
+
+// getBlockNum find execution block number for consensus slot
+// if slot does not have block, returns block number of prev slot
+func (r *receiver) getBlockNum(slot int64) (int64, int64, error) {
+	bn, err := r.cl.SlotToBlockNumber(phase0.Slot(slot))
+	if err != nil {
+		return 0, 0, err
+	}
+	if bn == 0 {
+		return r.getBlockNum(slot - 1)
+	}
+	return slot, int64(bn), nil
+}
+
+func (r *receiver) findSlotForBlockNumber(blockNumber, fromSlot, toSlot int64) (int64, error) {
+	low := fromSlot
+	high := toSlot
+	for low <= high {
+		slot, bn, err := r.getBlockNum((low + high) / 2)
+		if err != nil {
+			return 0, err
+		}
+		if bn == blockNumber {
+			r.l.Debugf("findSlotForBlockNumber() slot=%d with bn=%d fromSlot=%d toSlot=%d",
+				slot, blockNumber, fromSlot, toSlot)
+			return slot, nil
+		} else if bn > blockNumber {
+			high = slot - 1
+		} else {
+			if slot == low-1 {
+				// there is no block at slot (low+high)/2
+				low++
+			} else {
+				low = slot + 1
+			}
+		}
+	}
+	return 0, nil
 }
 
 func (r *receiver) getStatus() (*types.BMCLinkStatus, error) {
@@ -221,7 +261,7 @@ func (r *receiver) BuildBlockUpdate(bls *types.BMCLinkStatus, limit int64) ([]li
 }
 
 func (r *receiver) BuildBlockProof(bls *types.BMCLinkStatus, height int64) (link.BlockProof, error) {
-	r.l.Debugf("Build BlockProof for H:%d", height)
+	r.l.Debugf("Build BlockProof for slot:%d", height)
 	if height > bls.Verifier.Height {
 		return nil, errors.InvalidStateError.Errorf("%d slot is not yet finalized", height)
 	}
@@ -286,7 +326,8 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
 	header := mp.Header.Beacon
 	gindex := proof.HistoricalSummariesIdxToGIndex(SlotToHistoricalSummariesIndex(header.Slot))
-	r.l.Debugf("make blockProofData with historicalSummaries. slot:%d, gIndex:%d", header.Slot, gindex)
+	r.l.Debugf("make blockProofData with historicalSummaries. finalized: %d, slot:%d, gIndex:%d",
+		bls.Verifier.Height, header.Slot, gindex)
 	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
 	if err != nil {
 		return nil, err
@@ -296,7 +337,7 @@ func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus
 		return nil, err
 	}
 
-	tr, err := r.getHistoricalSummariesTrie(mp)
+	tr, err := r.getHistoricalSummariesTrie(mp.Slot)
 	if err != nil {
 		return nil, err
 	}
@@ -313,12 +354,13 @@ func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus
 	}, nil
 }
 
-func (r *receiver) getHistoricalSummariesTrie(mp *messageProofData) (*ssz.Node, error) {
-	header := mp.Header.Beacon
-	roots := make([][]byte, SlotPerHistoricalRoot, SlotPerHistoricalRoot)
-	start := int64(HistoricalSummariesStartSlot(header.Slot))
-	if _, ok := r.ht[start]; !ok {
+func (r *receiver) getHistoricalSummariesTrie(slot int64) (*ssz.Node, error) {
+	roots := make([][]byte, SlotPerHistoricalRoot)
+	start := int64(HistoricalSummariesStartSlot(phase0.Slot(slot)))
+	r.l.Debugf("getHistoricalSummariesTrie slot:%d start:%d", slot, start)
+	if ht, ok := r.ht[start]; !ok {
 		var prevRoot []byte
+		// find prevRoot
 		for i := int64(1); i < SlotPerHistoricalRoot; i++ {
 			root, err := r.cl.BeaconBlockRoot(strconv.FormatInt(start-i, 10))
 			if root != nil && err == nil {
@@ -326,6 +368,7 @@ func (r *receiver) getHistoricalSummariesTrie(mp *messageProofData) (*ssz.Node, 
 				break
 			}
 		}
+		// get historical roots
 		for i := int64(0); i < SlotPerHistoricalRoot; i++ {
 			root, err := r.cl.BeaconBlockRoot(strconv.FormatInt(start+i, 10))
 			if root == nil || err != nil {
@@ -346,6 +389,10 @@ func (r *receiver) getHistoricalSummariesTrie(mp *messageProofData) (*ssz.Node, 
 			return nil, err
 		}
 		r.ht[start] = tr
+		r.l.Debugf("getHistoricalSummariesTrie made trie at %d", start)
+	} else {
+		r.l.Debugf("getHistoricalSummariesTrie get trie from %d", start)
+		return ht, nil
 	}
 	return r.ht[start], nil
 }
@@ -361,7 +408,7 @@ func (r *receiver) BuildMessageProof(bls *types.BMCLinkStatus, limit int64) (lin
 	}
 
 	// TODO handle oversize mp
-	r.l.Debugf("new MessageProof with h:%d, seq:%d-%d", mpd.Height(), mpd.StartSeq, mpd.EndSeq)
+	r.l.Debugf("new MessageProof with slot:%d, seq:%d-%d", mpd.Height(), mpd.StartSeq, mpd.EndSeq)
 	return NewMessageProof(bls, mpd.EndSeq, mpd), nil
 }
 
@@ -457,6 +504,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				if err != nil {
 					r.l.Panicf("failed to get Finality Update. %+v", err)
 				}
+				fSlot := int64(fu.FinalizedHeader.Beacon.Slot)
 				r.l.Debugf("Find undelivered messages with: %+v, %+v", bls, extra)
 				var fromSlot int64
 				if extra.LastMsgSeq != 0 {
@@ -465,25 +513,33 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 					fromSlot = bls.Verifier.Height + 1
 				}
 				if bls.RxSeq < status.TxSeq {
-					mps, err := r.makeMessageProofDataByRange(
+					mps, err := r.messageProofDatasByRange(
 						fromSlot, bls.RxSeq+1,
 						slot-1, status.TxSeq,
 					)
 					if err != nil {
 						r.l.Panicf("failed to add missing message. %+v", err)
 					}
+					for _, mp := range mps {
+						if fSlot-mp.Slot >= SlotPerHistoricalRoot {
+							_, err = r.getHistoricalSummariesTrie(mp.Slot)
+							if err != nil {
+								r.l.Panicf("failed to make historicalSummariesTrie. %+v", err)
+							}
+						}
+					}
+					r.mps = append(r.mps, mps...)
 					r.l.Debugf("append %d messageProofDatas by range", len(mps))
 				}
 
-				r.addCheckPointsByRange(int64(fu.FinalizedHeader.Beacon.Slot), slot-1)
+				r.addCheckPointsByRange(fSlot, slot-1)
 			})
-			mp, err := r.makeMessageProofData(update.AttestedHeader)
+			mp, err := r.messageProofDataFromHeader(update.AttestedHeader)
 			if err != nil {
 				r.l.Warnf("fail to make messageProofData. %+v", err)
 				return
 			}
 			if mp != nil {
-				r.seq = mp.EndSeq
 				r.mps = append(r.mps, mp)
 				r.l.Debugf("append new mp: %s", mp)
 			}
@@ -632,87 +688,66 @@ func (r *receiver) makeBlockUpdateDatas(
 	return buds, nil
 }
 
-func (r *receiver) makeMessageProofDataByRange(from, fromSeq, to, toSeq int64) ([]*messageProofData, error) {
-	r.l.Debugf("start to find BTP messages. from %d(%d) to %d(%d)", from, fromSeq, to, toSeq)
+func (r *receiver) messageProofDatasByRange(fromSlot, fromSeq, toSlot, toSeq int64) ([]*messageProofData, error) {
+	r.l.Debugf("start to find BTP messages. from %d(%d) to %d(%d)", fromSlot, fromSeq, toSlot, toSeq)
 	mps := make([]*messageProofData, 0)
-	for i := from; i <= to; i++ {
-		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(i, 10))
-		if bh == nil || err != nil {
-			continue
+
+	fbn, err := r.cl.SlotToBlockNumber(phase0.Slot(fromSlot))
+	if err != nil {
+		return nil, err
+	}
+	tbn, err := r.cl.SlotToBlockNumber(phase0.Slot(toSlot))
+	if err != nil {
+		return nil, err
+	}
+
+	fSlot := fromSlot
+	for seq := fromSeq; seq <= toSeq; {
+		logs, err := r.getBTPLogsWithSeq(seq, fbn, tbn)
+		if err != nil {
+			return nil, err
 		}
-		mp, err := r.makeMessageProofData(&capella.LightClientHeader{Beacon: bh.Header.Message})
+		if len(logs) == 0 {
+			return nil, errors.NotFoundError.Errorf("can't find BTP message with seq %d", seq)
+		}
+
+		bn := logs[0].BlockNumber
+		slot, err := r.findSlotForBlockNumber(int64(bn), fSlot, toSlot)
+		if err != nil {
+			return nil, err
+		}
+		r.l.Debugf("%d BTP messages at slot:%d, blockNum:%d", len(logs), slot, bn)
+
+		bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(slot, 10))
+		if err != nil {
+			return nil, err
+		}
+		if bh == nil {
+			return nil, errors.NotFoundError.Errorf("there is no header for %d", slot)
+		}
+
+		mp, err := r.makeMessageProofData(&capella.LightClientHeader{Beacon: bh.Header.Message}, logs)
 		if err != nil {
 			return nil, err
 		}
 		if mp == nil {
-			continue
+			return nil, errors.InvalidStateError.Errorf("failed to make messageProofData for seq %d", seq)
 		}
 		mps = append(mps, mp)
-		r.seq = mp.EndSeq
-		r.mps = append(r.mps, mp)
-		r.l.Debugf("make mp by range: %s", mp)
 
-		if mp.EndSeq >= toSeq {
-			break
-		}
+		// update seq, fbn and fSlot
+		seq = mp.EndSeq + 1
+		fbn = bn + 1
+		fSlot = slot + 1
 	}
+
 	return mps, nil
 }
 
-func (r *receiver) makeMessageProofData(header *capella.LightClientHeader) (mp *messageProofData, err error) {
-	var elBlockNum uint64
-	slot := int64(header.Beacon.Slot)
-
-	if header.Execution == nil {
-		elBlockNum, err = r.cl.SlotToBlockNumber(phase0.Slot(slot))
-		if err != nil {
-			err = errors.NotFoundError.Wrapf(err, "fail to get block number for slot %d", slot)
-			return
-		}
-	} else {
-		elBlockNum = header.Execution.BlockNumber
-	}
-
-	bn := big.NewInt(int64(elBlockNum))
-	logs, err := r.getEventLogs(bn, bn)
+func (r *receiver) messageProofDataFromHeader(header *capella.LightClientHeader) (*messageProofData, error) {
+	bn := big.NewInt(int64(header.Execution.BlockNumber))
+	logs, err := r.getBTPLogs(bn, bn)
 	if err != nil {
-		return
-	}
-	if len(logs) == 0 {
-		return
-	}
-	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d", len(logs), slot, elBlockNum)
-
-	receiptProofs, err := r.makeReceiptProofs(bn, logs)
-	if err != nil {
-		return
-	}
-
-	receiptsRootProof, err := r.makeReceiptsRootProof(slot)
-	if err != nil {
-		return
-	}
-
-	bms, _ := r.bmc.ParseMessage(logs[0])
-	bme, _ := r.bmc.ParseMessage(logs[len(logs)-1])
-
-	mp = &messageProofData{
-		Slot:              slot,
-		ReceiptsRootProof: receiptsRootProof,
-		ReceiptProofs:     receiptProofs,
-		Header:            header.ToAltair(),
-		StartSeq:          bms.Seq.Int64(),
-		EndSeq:            bme.Seq.Int64(),
-	}
-	return
-}
-
-func (r *receiver) getEventLogs(from, to *big.Int) ([]etypes.Log, error) {
-	fq := *r.fq
-	fq.FromBlock = from
-	fq.ToBlock = to
-	logs, err := r.el.FilterLogs(fq)
-	for err != nil {
 		return nil, err
 	}
 
@@ -734,18 +769,107 @@ func (r *receiver) getEventLogs(from, to *big.Int) ([]etypes.Log, error) {
 			r.l.Debugf("skip already relayed message. (i:%d e:%d r:%d)", i, seq, message.Seq.Int64())
 			idxToSkip = i
 		} else {
-			r.l.Debugf("BTP Message#%d[seq:%d] dst:%s", i, message.Seq, r.dst.String())
+			r.l.Debugf("BTP Message#%d [seq:%d bn:%d] ", i, message.Seq, l.BlockNumber)
 		}
 		seq += 1
 	}
 	if idxToSkip > -1 {
 		logs = logs[idxToSkip+1:]
 	}
-	return logs, nil
+	if len(logs) == 0 {
+		return nil, nil
+	}
+	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d", len(logs), header.Beacon.Slot, bn)
+	return r.makeMessageProofData(header, logs)
 }
 
-// makeReceiptProofs make proofs for receipts which has BTP message
-func (r *receiver) makeReceiptProofs(bn *big.Int, logs []etypes.Log) ([]*receiptProof, error) {
+// makeMessageProofData make messageProofData with LightClientHeader and logs.
+func (r *receiver) makeMessageProofData(header *capella.LightClientHeader, logs []etypes.Log) (mp *messageProofData, err error) {
+	slot := int64(header.Beacon.Slot)
+	if len(logs) == 0 {
+		return
+	}
+
+	receiptProofs, err := r.makeReceiptProofs(logs)
+	if err != nil {
+		return
+	}
+
+	receiptsRootProof, err := r.makeReceiptsRootProof(slot)
+	if err != nil {
+		return
+	}
+
+	bms, _ := r.bmc.ParseMessage(logs[0])
+	bme, _ := r.bmc.ParseMessage(logs[len(logs)-1])
+
+	mp = &messageProofData{
+		Slot:              slot,
+		ReceiptsRootProof: receiptsRootProof,
+		ReceiptProofs:     receiptProofs,
+		Header:            header.ToAltair(),
+		StartSeq:          bms.Seq.Int64(),
+		EndSeq:            bme.Seq.Int64(),
+	}
+	r.seq = mp.EndSeq
+	r.l.Debugf("make messageProofData for BN:%d. %s", logs[0].BlockNumber, mp)
+	return
+}
+
+// getBTPLogs returns all BTP logs in blocks specified by from and to
+func (r *receiver) getBTPLogs(from, to *big.Int) ([]etypes.Log, error) {
+	fq := *r.fq
+	fq.FromBlock = from
+	fq.ToBlock = to
+	return r.el.FilterLogs(fq)
+}
+
+// getBTPLogsWithSeq find the block that contains BTP event log containing seq and
+// returns all BTP event logs in that block with a sequence number greater than or equal to seq.
+func (r *receiver) getBTPLogsWithSeq(seq int64, from, to uint64) ([]etypes.Log, error) {
+	r.l.Debugf("getBTPLogsWithSeq() seq=%d fromBN=%d toBN=%d", seq, from, to)
+	for bn := from; bn < to; bn++ {
+		fbn := big.NewInt(int64(bn))
+		if bn+maxFilterLogsBlockNumber > to {
+			bn = to
+		} else {
+			bn += maxFilterLogsBlockNumber
+		}
+		tbn := big.NewInt(int64(bn))
+
+		logs, err := r.getBTPLogs(fbn, tbn)
+		if err != nil {
+			return nil, err
+		}
+		var s, e int
+		blockNum := uint64(0)
+		for i, l := range logs {
+			message, err := r.bmc.ParseMessage(l)
+			if err != nil {
+				return nil, err
+			}
+			if message.Seq.Int64() == seq || l.BlockNumber == blockNum {
+				r.l.Debugf("BTP message for %d BN: %d", message.Seq, l.BlockNumber)
+				if blockNum == 0 {
+					s = i
+					blockNum = l.BlockNumber
+				}
+				e = i + 1
+			}
+		}
+		if blockNum != 0 {
+			return logs[s:e], nil
+		}
+	}
+	return nil, nil
+}
+
+// makeReceiptProofs make proofs for receipts which has BTP message. logs must be in same block.
+func (r *receiver) makeReceiptProofs(logs []etypes.Log) ([]*receiptProof, error) {
+	if len(logs) == 0 {
+		return nil, nil
+	}
+	bn := big.NewInt(int64(logs[0].BlockNumber))
 	receipts, err := r.getReceipts(bn)
 	if err != nil {
 		return nil, err
@@ -759,6 +883,7 @@ func (r *receiver) makeReceiptProofs(bn *big.Int, logs []etypes.Log) ([]*receipt
 	return getReceiptProofs(receiptTrie, logs)
 }
 
+// getReceipts returns all receipts in the block specified by bn.
 func (r *receiver) getReceipts(bn *big.Int) ([]*etypes.Receipt, error) {
 	block, err := r.el.BlockByNumber(bn)
 	if err != nil {
@@ -800,6 +925,7 @@ func trieFromReceipts(receipts etypes.Receipts) (*trie.Trie, error) {
 	return tr, nil
 }
 
+// getReceiptProofs get slice of receiptProof of logs from receipt Proof Trie tr.
 func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error) {
 	keys := make(map[uint]bool)
 	rps := make([]*receiptProof, 0)
@@ -838,7 +964,7 @@ func (r *receiver) makeReceiptsRootProof(slot int64) (*ssz.Proof, error) {
 
 func (r *receiver) addCheckPoint(bh *phase0.BeaconBlockHeader) {
 	if IsCheckPoint(bh.Slot) {
-		r.l.Debugf("add checkpoint at %d", bh.Slot)
+		r.l.Debugf("add checkpoint at %d, %+v", bh.Slot, bh.String())
 		r.cp[int64(bh.Slot)] = bh
 	}
 }
@@ -855,24 +981,26 @@ func (r *receiver) addCheckPointsByRange(from, to int64) {
 
 func (r *receiver) validateMessageProofData(update *capella.LightClientFinalityUpdate) error {
 	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
-	invalid := false
+	valid := false
 	r.l.Debugf("validate messageProofDatas at %d.", fSlot)
 	if cp, ok := r.cp[fSlot]; ok {
-		invalid = cp.String() != update.FinalizedHeader.Beacon.String()
+		valid = cp.String() == update.FinalizedHeader.Beacon.String()
+		r.l.Debugf("find checkpoint %v", valid)
 		delete(r.cp, fSlot)
 	} else {
-		invalid = true
+		r.l.Debugf("no checkpoint")
+		valid = false
 	}
 
 	// rebuild message proof data and checkpoint
-	if invalid {
+	if !valid {
 		r.l.Debugf("invalid messageProofDatas at %d. reset messageProofDatas", fSlot)
 		r.mps = make([]*messageProofData, 0)
-		r.cp = make(map[int64]*phase0.BeaconBlockHeader, 0)
+		r.cp = make(map[int64]*phase0.BeaconBlockHeader)
 		r.seq = r.prevRS.Seq()
 		aSlot := int64(update.AttestedHeader.Beacon.Slot)
 
-		mps, err := r.makeMessageProofDataByRange(
+		mps, err := r.messageProofDatasByRange(
 			r.prevRS.Height()+1, r.prevRS.Seq()+1, aSlot, math.MaxInt64,
 		)
 		if err != nil {
