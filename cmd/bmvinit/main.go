@@ -174,7 +174,7 @@ func getBMVInitialData(url, blockId string) (*bmvInitData, error) {
 	}
 
 	var finalizedHeader []byte
-	finalizedHeader, err = bootStrap.Header.MarshalSSZTo(finalizedHeader)
+	finalizedHeader, err = bootStrap.Header.ToAltair().MarshalSSZTo(finalizedHeader)
 	if err != nil {
 		return nil, err
 	}
