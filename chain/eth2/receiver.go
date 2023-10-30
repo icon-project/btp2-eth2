@@ -19,7 +19,6 @@ package eth2
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"math/big"
 	"strconv"
 	"sync"
@@ -209,6 +208,14 @@ func (r *receiver) GetHeightForSeq(seq int64) int64 {
 		return 0
 	}
 	return mp.Height()
+}
+
+func (r *receiver) getLastMessageSeq() int64 {
+	ls := r.seq
+	if len(r.mps) > 0 {
+		ls = r.mps[len(r.mps)-1].EndSeq
+	}
+	return ls
 }
 
 func (r *receiver) GetMessageProofDataForSeq(seq int64) *messageProofData {
@@ -581,17 +588,17 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				r.l.Warnf("failed to make blockUpdateData. %+v", err)
 				return
 			}
-			err = r.validateMessageProofData(update)
+			err = r.validateMessageProofData(bls, update)
+			if err != nil {
+				r.l.Warnf("failed to validate messageProofData. %+v", err)
+				return
+			}
 			lastSeq := r.prevRS.Seq()
 			lmp := r.GetLastMessageProofDataForHeight(slot)
 			if lmp != nil {
 				lastSeq = lmp.EndSeq
 			}
 			rs := &receiveStatus{seq: lastSeq, slot: slot, buds: buds}
-			if err != nil {
-				r.l.Warnf("failed to validate messageProofData. %+v", err)
-				return
-			}
 			r.rss = append(r.rss, rs)
 			r.rsc <- rs
 			r.prevRS = rs
@@ -849,7 +856,7 @@ func (r *receiver) getBTPLogsWithSeq(seq int64, from, to uint64) ([]etypes.Log, 
 				return nil, err
 			}
 			if message.Seq.Int64() == seq || l.BlockNumber == blockNum {
-				r.l.Debugf("BTP message for %d BN: %d", message.Seq, l.BlockNumber)
+				r.l.Debugf("BTP message(seq:%d) at BN: %d", message.Seq, l.BlockNumber)
 				if blockNum == 0 {
 					s = i
 					blockNum = l.BlockNumber
@@ -979,37 +986,55 @@ func (r *receiver) addCheckPointsByRange(from, to int64) {
 	}
 }
 
-func (r *receiver) validateMessageProofData(update *capella.LightClientFinalityUpdate) error {
+func (r *receiver) validateMessageProofData(bls *types.BMCLinkStatus, update *capella.LightClientFinalityUpdate) error {
+	aSlot := int64(update.AttestedHeader.Beacon.Slot)
 	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
+	status, err := r.getStatus()
+	if err != nil {
+		return err
+	}
+
 	valid := false
-	r.l.Debugf("validate messageProofDatas at %d.", fSlot)
+	r.l.Debugf("validate messageProofDatas at aSlot:%d, fSlot:%d, rStatus:%+v, bls:%+v.", aSlot, fSlot, status, bls)
 	if cp, ok := r.cp[fSlot]; ok {
 		valid = cp.String() == update.FinalizedHeader.Beacon.String()
-		r.l.Debugf("find checkpoint %v", valid)
-		delete(r.cp, fSlot)
+		if !valid {
+			r.l.Debugf("made messageProofData with invalid optimistic header")
+		} else {
+			if status.TxSeq > bls.RxSeq {
+				if status.TxSeq != r.getLastMessageSeq() {
+					r.l.Debugf("there is missing BTP message. (seq: %d ~ %d)",
+						r.getLastMessageSeq()+1, status.TxSeq,
+					)
+					valid = false
+				}
+			}
+		}
 	} else {
 		r.l.Debugf("no checkpoint")
 		valid = false
 	}
 
-	// rebuild message proof data and checkpoint
-	if !valid {
-		r.l.Debugf("invalid messageProofDatas at %d. reset messageProofDatas", fSlot)
+	if valid {
+		delete(r.cp, fSlot)
+	} else {
+		r.l.Debugf("rebuild messageProofDatas seq")
 		r.mps = make([]*messageProofData, 0)
 		r.cp = make(map[int64]*phase0.BeaconBlockHeader)
 		r.seq = r.prevRS.Seq()
-		aSlot := int64(update.AttestedHeader.Beacon.Slot)
 
 		mps, err := r.messageProofDatasByRange(
-			r.prevRS.Height()+1, r.prevRS.Seq()+1, aSlot, math.MaxInt64,
+			r.prevRS.Height()+1, r.prevRS.Seq()+1, aSlot, status.TxSeq,
 		)
 		if err != nil {
 			return err
 		}
-		r.addCheckPointsByRange(fSlot, aSlot)
 		if len(mps) > 0 {
+			r.mps = append(r.mps, mps...)
 			r.l.Debugf("append %d messageProofDatas by range", len(mps))
 		}
+
+		r.addCheckPointsByRange(fSlot, aSlot)
 	}
 
 	return nil
