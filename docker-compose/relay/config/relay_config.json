@@ -24,7 +24,7 @@
       "address": "btp://0x42.icon/cxa1bc80591b5e3d29c136648c477f37c609d1f5dc",
       "endpoint": "http://icon-node/api/v3/icon_dex",
       "key_store": "/keystore/icon/keystore.json",
-      "key_password": "gochain"
+      "key_password": "gochain",
       "type": "icon-btpblock"
     },
     "dst": {
