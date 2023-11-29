@@ -16,8 +16,7 @@ import (
 )
 
 const (
-	DefaultTimeout  = 10 * time.Second //
-	DefaultGasLimit = 8000000
+	DefaultTimeout = 10 * time.Second //
 )
 
 type ExecutionLayer struct {
@@ -58,16 +57,19 @@ func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey, gasLimit uint64) (
 	if err != nil {
 		return nil, err
 	}
-	rewards := new(big.Int)
+
+	tipCap := new(big.Int)
 	for _, r := range fh.Reward {
-		rewards.Add(rewards, r[0])
+		tipCap.Add(tipCap, r[0])
 	}
-	txo.GasTipCap = rewards.Div(rewards, big.NewInt(int64(len(fh.Reward))))
-	if gasLimit != 0 {
-		txo.GasLimit = gasLimit
-	} else {
-		txo.GasLimit = DefaultGasLimit
+	txo.GasTipCap = tipCap.Div(tipCap, big.NewInt(int64(len(fh.Reward))))
+
+	baseFee := fh.BaseFee[len(fh.BaseFee)-1]
+	if baseFee.Sign() == 1 {
+		txo.GasFeeCap = new(big.Int).Add(baseFee, tipCap)
 	}
+
+	txo.GasLimit = gasLimit
 
 	return txo, nil
 }
