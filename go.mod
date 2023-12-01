@@ -8,7 +8,7 @@ require (
 	github.com/attestantio/go-eth2-client v0.0.0-00010101000000-000000000000
 	github.com/ethereum/go-ethereum v1.11.3
 	github.com/ferranbt/fastssz v0.1.3
-	github.com/icon-project/btp2 v1.0.6
+	github.com/icon-project/btp2 v1.0.7
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1
