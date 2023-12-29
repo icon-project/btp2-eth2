@@ -13,7 +13,6 @@ const (
 
 	ForkEpochCapellaSepolia = 56832
 	ForkEpochCapellaMainnet = 194048
-	ForkEpochCapella        = ForkEpochCapellaSepolia
 )
 
 // SlotToEpoch returns the epoch number of the input slot.
@@ -41,10 +40,21 @@ func SlotToBlockRootsIndex(s phase0.Slot) uint64 {
 	return uint64(s % SlotPerHistoricalRoot)
 }
 
-func SlotToHistoricalSummariesIndex(s phase0.Slot) uint64 {
-	return uint64(s-ForkEpochCapella*SlotPerEpoch) / SlotPerHistoricalRoot
+func forkEpochCapella(bn BeaconNetwork) uint64 {
+	switch bn {
+	case Mainnet:
+		return ForkEpochCapellaMainnet
+	case Sepolia:
+		return ForkEpochCapellaSepolia
+	default:
+		return 0
+	}
 }
 
-func HistoricalSummariesStartSlot(s phase0.Slot) phase0.Slot {
-	return phase0.Slot((ForkEpochCapella * SlotPerEpoch) + SlotToHistoricalSummariesIndex(s)*SlotPerHistoricalRoot)
+func SlotToHistoricalSummariesIndex(bn BeaconNetwork, s phase0.Slot) uint64 {
+	return (uint64(s) - forkEpochCapella(bn)*SlotPerEpoch) / SlotPerHistoricalRoot
+}
+
+func HistoricalSummariesStartSlot(bn BeaconNetwork, s phase0.Slot) phase0.Slot {
+	return phase0.Slot((forkEpochCapella(bn) * SlotPerEpoch) + SlotToHistoricalSummariesIndex(bn, s)*SlotPerHistoricalRoot)
 }

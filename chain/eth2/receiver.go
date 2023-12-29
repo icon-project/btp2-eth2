@@ -83,6 +83,7 @@ type receiver struct {
 	l      log.Logger
 	src    types.BtpAddress
 	dst    types.BtpAddress
+	bn     BeaconNetwork
 	cl     *client.ConsensusLayer
 	el     *client.ExecutionLayer
 	bmc    *client.BMC
@@ -114,13 +115,20 @@ func newReceiver(src, dst types.BtpAddress, endpoint string, opt map[string]inte
 		ht: make(map[int64]*ssz.Node),
 		cp: make(map[int64]*phase0.BeaconBlockHeader),
 	}
-	r.el, err = client.NewExecutionLayer(endpoint, l)
-	if err != nil {
-		l.Panicf("failed to connect to %s, %v", endpoint, err)
-	}
+
 	r.cl, err = client.NewConsensusLayer(opt["consensus_endpoint"].(string), l)
 	if err != nil {
 		l.Panicf("failed to connect to %s, %v", opt["consensus_endpoint"].(string), err)
+	}
+	r.bn, err = getBeaconNetwork(r.cl)
+	if err != nil {
+		l.Panicf("fail to get beacon network, %v", err)
+	}
+	r.l.Debugf("Detected beacon network : %s", r.bn.String())
+
+	r.el, err = client.NewExecutionLayer(endpoint, l)
+	if err != nil {
+		l.Panicf("failed to connect to %s, %v", endpoint, err)
 	}
 	r.bmc, err = client.NewBMC(common.HexToAddress(r.src.ContractAddress()), r.el.GetBackend())
 	if err != nil {
@@ -332,7 +340,7 @@ func (r *receiver) blockProofDataViaBlockRoots(bls *types.BMCLinkStatus, mp *mes
 
 func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus, mp *messageProofData) (*blockProofData, error) {
 	header := mp.Header.Beacon
-	gindex := proof.HistoricalSummariesIdxToGIndex(SlotToHistoricalSummariesIndex(header.Slot))
+	gindex := proof.HistoricalSummariesIdxToGIndex(SlotToHistoricalSummariesIndex(r.bn, header.Slot))
 	r.l.Debugf("make blockProofData with historicalSummaries. finalized: %d, slot:%d, gIndex:%d",
 		bls.Verifier.Height, header.Slot, gindex)
 	bp, err := r.cl.GetStateProofWithGIndex(strconv.FormatInt(bls.Verifier.Height, 10), gindex)
@@ -363,7 +371,7 @@ func (r *receiver) blockProofDataViaHistoricalSummaries(bls *types.BMCLinkStatus
 
 func (r *receiver) getHistoricalSummariesTrie(slot int64) (*ssz.Node, error) {
 	roots := make([][]byte, SlotPerHistoricalRoot)
-	start := int64(HistoricalSummariesStartSlot(phase0.Slot(slot)))
+	start := int64(HistoricalSummariesStartSlot(r.bn, phase0.Slot(slot)))
 	r.l.Debugf("getHistoricalSummariesTrie slot:%d start:%d", slot, start)
 	if ht, ok := r.ht[start]; !ok {
 		var prevRoot []byte
