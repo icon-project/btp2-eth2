@@ -230,7 +230,7 @@ func TestReceiver_MessageProof(t *testing.T) {
 	}
 
 	var mp *messageProofData
-	mp, err = r.makeMessageProofData(header)
+	mp, err = r.makeMessageProofData(header, nil)
 	assert.NoError(t, err)
 
 	// verify receiptsRoot
