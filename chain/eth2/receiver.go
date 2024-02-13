@@ -26,16 +26,16 @@ import (
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	etypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/icon-project/btp2/common/codec"
 	"github.com/icon-project/btp2/common/errors"
@@ -51,7 +51,7 @@ const (
 	eventSignature = "Message(string,uint256,bytes)"
 
 	maxFinalityUpdateRetry   = 5
-	maxFilterLogsBlockNumber = uint64(128)
+	maxFilterLogsBlockNumber = int64(128)
 )
 
 type receiveStatus struct {
@@ -500,7 +500,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	r.l.Debugf("Start ethereum monitoring")
 	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
 		if event.Topic == client.TopicLCOptimisticUpdate {
-			update := event.Data.(*capella.LightClientOptimisticUpdate)
+			update := event.Data.(*deneb.LightClientOptimisticUpdate)
 			slot := int64(update.AttestedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client optimistic update. slot:%d", slot)
 			once.Do(func() {
@@ -560,9 +560,13 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			}
 			r.addCheckPoint(update.AttestedHeader.Beacon)
 		} else if event.Topic == client.TopicLCFinalityUpdate {
-			update := event.Data.(*capella.LightClientFinalityUpdate)
+			update := event.Data.(*deneb.LightClientFinalityUpdate)
 			slot := int64(update.FinalizedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client finality update. slot:%d", slot)
+			if !IsCheckPoint(update.FinalizedHeader.Beacon.Slot) {
+				r.l.Debugf("skip slot %d has no block", slot)
+				return
+			}
 			if bls.Verifier.Height >= slot {
 				r.l.Debugf("skip already processed finality update")
 				return
@@ -617,7 +621,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	return nil
 }
 
-func validateFinalityUpdate(u *capella.LightClientFinalityUpdate) error {
+func validateFinalityUpdate(u *deneb.LightClientFinalityUpdate) error {
 	if u.FinalizedHeader.Beacon.Slot > u.AttestedHeader.Beacon.Slot {
 		return errors.Errorf("invalid slot. finalized header > attested header")
 	}
@@ -648,7 +652,7 @@ func validateFinalityUpdate(u *capella.LightClientFinalityUpdate) error {
 
 func (r *receiver) makeBlockUpdateDatas(
 	bls *types.BMCLinkStatus,
-	update *capella.LightClientFinalityUpdate,
+	update *deneb.LightClientFinalityUpdate,
 ) ([]*blockUpdateData, error) {
 	var nsc *altair.SyncCommittee
 	var nscBranch [][]byte
@@ -657,6 +661,7 @@ func (r *receiver) makeBlockUpdateDatas(
 	blsSCPeriod := SlotToSyncCommitteePeriod(phase0.Slot(bls.Verifier.Height))
 
 	if scPeriod > blsSCPeriod {
+		r.l.Debugf("get light cilent updates from %d to %d", blsSCPeriod, scPeriod)
 		lcUpdate, err := r.cl.LightClientUpdates(blsSCPeriod, scPeriod-blsSCPeriod)
 		if err != nil {
 			return nil, err
@@ -707,11 +712,13 @@ func (r *receiver) messageProofDatasByRange(fromSlot, fromSeq, toSlot, toSeq int
 	r.l.Debugf("start to find BTP messages. from %d(%d) to %d(%d)", fromSlot, fromSeq, toSlot, toSeq)
 	mps := make([]*messageProofData, 0)
 
-	fbn, err := r.cl.SlotToBlockNumber(phase0.Slot(fromSlot))
+	//fbn, err := r.cl.SlotToBlockNumber(phase0.Slot(fromSlot))
+	_, fbn, err := r.getBlockNum(fromSlot)
 	if err != nil {
 		return nil, err
 	}
-	tbn, err := r.cl.SlotToBlockNumber(phase0.Slot(toSlot))
+	_, tbn, err := r.getBlockNum(toSlot)
+	//tbn, err := r.cl.SlotToBlockNumber(phase0.Slot(toSlot))
 	if err != nil {
 		return nil, err
 	}
@@ -726,8 +733,8 @@ func (r *receiver) messageProofDatasByRange(fromSlot, fromSeq, toSlot, toSeq int
 			return nil, errors.NotFoundError.Errorf("can't find BTP message with seq %d", seq)
 		}
 
-		bn := logs[0].BlockNumber
-		slot, err := r.findSlotForBlockNumber(int64(bn), fSlot, toSlot)
+		bn := int64(logs[0].BlockNumber)
+		slot, err := r.findSlotForBlockNumber(bn, fSlot, toSlot)
 		if err != nil {
 			return nil, err
 		}
@@ -741,7 +748,7 @@ func (r *receiver) messageProofDatasByRange(fromSlot, fromSeq, toSlot, toSeq int
 			return nil, errors.NotFoundError.Errorf("there is no header for %d", slot)
 		}
 
-		mp, err := r.makeMessageProofData(&capella.LightClientHeader{Beacon: bh.Header.Message}, logs)
+		mp, err := r.makeMessageProofData(&deneb.LightClientHeader{Beacon: bh.Header.Message}, logs)
 		if err != nil {
 			return nil, err
 		}
@@ -759,7 +766,7 @@ func (r *receiver) messageProofDatasByRange(fromSlot, fromSeq, toSlot, toSeq int
 	return mps, nil
 }
 
-func (r *receiver) messageProofDataFromHeader(header *capella.LightClientHeader) (*messageProofData, error) {
+func (r *receiver) messageProofDataFromHeader(header *deneb.LightClientHeader) (*messageProofData, error) {
 	bn := big.NewInt(int64(header.Execution.BlockNumber))
 	logs, err := r.getBTPLogs(bn, bn)
 	if err != nil {
@@ -799,18 +806,18 @@ func (r *receiver) messageProofDataFromHeader(header *capella.LightClientHeader)
 }
 
 // makeMessageProofData make messageProofData with LightClientHeader and logs.
-func (r *receiver) makeMessageProofData(header *capella.LightClientHeader, logs []etypes.Log) (mp *messageProofData, err error) {
+func (r *receiver) makeMessageProofData(header *deneb.LightClientHeader, logs []etypes.Log) (mp *messageProofData, err error) {
 	slot := int64(header.Beacon.Slot)
 	if len(logs) == 0 {
 		return
 	}
 
-	receiptProofs, err := r.makeReceiptProofs(logs)
+	receiptsRootProof, err := r.makeReceiptsRootProof(slot)
 	if err != nil {
 		return
 	}
 
-	receiptsRootProof, err := r.makeReceiptsRootProof(slot)
+	receiptProofs, err := r.makeReceiptProofs(logs)
 	if err != nil {
 		return
 	}
@@ -841,7 +848,7 @@ func (r *receiver) getBTPLogs(from, to *big.Int) ([]etypes.Log, error) {
 
 // getBTPLogsWithSeq find the block that contains BTP event log containing seq and
 // returns all BTP event logs in that block with a sequence number greater than or equal to seq.
-func (r *receiver) getBTPLogsWithSeq(seq int64, from, to uint64) ([]etypes.Log, error) {
+func (r *receiver) getBTPLogsWithSeq(seq int64, from, to int64) ([]etypes.Log, error) {
 	r.l.Debugf("getBTPLogsWithSeq() seq=%d fromBN=%d toBN=%d", seq, from, to)
 	for bn := from; bn < to; bn++ {
 		fbn := big.NewInt(int64(bn))
@@ -920,7 +927,7 @@ func (r *receiver) getReceipts(bn *big.Int) ([]*etypes.Receipt, error) {
 
 // trieFromReceipts make receipt MPT with receipts
 func trieFromReceipts(receipts etypes.Receipts) (*trie.Trie, error) {
-	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	db := trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	tr := trie.NewEmpty(db)
 
 	for _, r := range receipts {
@@ -954,12 +961,13 @@ func getReceiptProofs(tr *trie.Trie, logs []etypes.Log) ([]*receiptProof, error)
 		if err != nil {
 			return nil, err
 		}
-		nodes := light.NewNodeSet()
-		err = tr.Prove(key, 0, nodes)
+		nodes := trienode.NewProofSet()
+		err = tr.Prove(key, nodes)
 		if err != nil {
 			return nil, err
 		}
-		p, err := rlp.EncodeToBytes(nodes.NodeList())
+		//p, err := rlp.EncodeToBytes(nodes.NodeList())
+		p, err := rlp.EncodeToBytes(nodes.List())
 		if err != nil {
 			return nil, err
 		}
@@ -994,7 +1002,7 @@ func (r *receiver) addCheckPointsByRange(from, to int64) {
 	}
 }
 
-func (r *receiver) validateMessageProofData(bls *types.BMCLinkStatus, update *capella.LightClientFinalityUpdate) error {
+func (r *receiver) validateMessageProofData(bls *types.BMCLinkStatus, update *deneb.LightClientFinalityUpdate) error {
 	aSlot := int64(update.AttestedHeader.Beacon.Slot)
 	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
 	status, err := r.getStatus()

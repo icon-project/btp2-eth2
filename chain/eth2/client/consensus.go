@@ -9,12 +9,14 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/http"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/icon-project/btp2/common/log"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -33,44 +35,101 @@ type ConsensusLayer struct {
 	log     log.Logger
 }
 
-func (c *ConsensusLayer) Genesis() (*api.Genesis, error) {
-	return c.service.(*http.Service).Genesis(c.ctx)
+func (c *ConsensusLayer) Genesis() (*apiv1.Genesis, error) {
+	resp, err := c.service.(*http.Service).Genesis(c.ctx, &api.GenesisOpts{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, err
 }
 
-func (c *ConsensusLayer) BeaconBlockHeader(blockID string) (*api.BeaconBlockHeader, error) {
-	return c.service.(*http.Service).BeaconBlockHeader(c.ctx, blockID)
+func (c *ConsensusLayer) BeaconBlockHeader(blockID string) (*apiv1.BeaconBlockHeader, error) {
+	resp, err := c.service.(*http.Service).BeaconBlockHeader(c.ctx, &api.BeaconBlockHeaderOpts{Block: blockID})
+	if err != nil {
+		if notFoundError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return resp.Data, err
 }
 
 func (c *ConsensusLayer) BeaconBlock(blockID string) (*spec.VersionedSignedBeaconBlock, error) {
-	return c.service.(*http.Service).SignedBeaconBlock(c.ctx, blockID)
+	resp, err := c.service.(*http.Service).SignedBeaconBlock(c.ctx, &api.SignedBeaconBlockOpts{Block: blockID})
+	if err != nil {
+		if notFoundError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return resp.Data, err
 }
 
 func (c *ConsensusLayer) BeaconBlockRoot(blockID string) (*phase0.Root, error) {
-	return c.service.(*http.Service).BeaconBlockRoot(c.ctx, blockID)
+	resp, err := c.service.(*http.Service).BeaconBlockRoot(c.ctx, &api.BeaconBlockRootOpts{Block: blockID})
+	if err != nil {
+		if notFoundError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return resp.Data, err
 }
 
-func (c *ConsensusLayer) FinalityCheckpoints(stateID string) (*api.Finality, error) {
-	return c.service.(*http.Service).Finality(c.ctx, stateID)
+func (c *ConsensusLayer) FinalityCheckpoints(stateID string) (*apiv1.Finality, error) {
+	resp, err := c.service.(*http.Service).Finality(c.ctx, &api.FinalityOpts{State: stateID})
+	if err != nil {
+		if notFoundError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return resp.Data, err
 }
 
 func (c *ConsensusLayer) Events(topics []string, handler eth2client.EventHandlerFunc) error {
 	return c.service.(eth2client.EventsProvider).Events(c.ctx, topics, handler)
 }
 
-func (c *ConsensusLayer) LightClientBootstrap(blockRoot phase0.Root) (*capella.LightClientBootstrap, error) {
-	return c.service.(*http.Service).LightClientBootstrap(c.ctx, blockRoot)
+func (c *ConsensusLayer) LightClientBootstrap(blockRoot phase0.Root) (*deneb.LightClientBootstrap, error) {
+	resp, err := c.service.(*http.Service).LightClientBootstrap(
+		c.ctx,
+		&api.LightClientBootstrapOpts{Block: fmt.Sprintf("%#x", blockRoot)},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, err
 }
 
-func (c *ConsensusLayer) LightClientUpdates(startPeriod, count uint64) ([]*capella.LightClientUpdate, error) {
-	return c.service.(*http.Service).LightClientUpdates(c.ctx, startPeriod, count)
+func (c *ConsensusLayer) LightClientUpdates(startPeriod, count uint64) ([]*deneb.LightClientUpdate, error) {
+	resp, err := c.service.(*http.Service).LightClientUpdates(
+		c.ctx,
+		&api.LightClientUpdatesOpts{StartPeriod: startPeriod, Count: count},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, err
 }
 
-func (c *ConsensusLayer) LightClientOptimisticUpdate() (*capella.LightClientOptimisticUpdate, error) {
-	return c.service.(*http.Service).LightClientOptimisticUpdate(c.ctx)
+func (c *ConsensusLayer) LightClientOptimisticUpdate() (*deneb.LightClientOptimisticUpdate, error) {
+	resp, err := c.service.(*http.Service).LightClientOptimisticUpdate(c.ctx, &api.CommonOpts{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, err
 }
 
-func (c *ConsensusLayer) LightClientFinalityUpdate() (*capella.LightClientFinalityUpdate, error) {
-	return c.service.(*http.Service).LightClientFinalityUpdate(c.ctx)
+type LightClientFinalityUpdate struct {
+}
+
+func (c *ConsensusLayer) LightClientFinalityUpdate() (*deneb.LightClientFinalityUpdate, error) {
+	resp, err := c.service.(*http.Service).LightClientFinalityUpdate(c.ctx, &api.CommonOpts{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, err
 }
 
 func (c *ConsensusLayer) GetStateProofWithGIndex(stateId string, gindex uint64) ([]byte, error) {
@@ -112,6 +171,7 @@ func (c *ConsensusLayer) SlotToBlockNumber(slot phase0.Slot) (uint64, error) {
 
 	block, err := c.BeaconBlock(strconv.FormatInt(int64(sn), 10))
 	if err != nil || block == nil {
+		c.log.Debugf("no block for slot %d. %+v", slot, err)
 		return 0, err
 	}
 	return block.BlockNumber()
@@ -119,6 +179,14 @@ func (c *ConsensusLayer) SlotToBlockNumber(slot phase0.Slot) (uint64, error) {
 
 func (c *ConsensusLayer) Term() {
 	c.cancel()
+}
+
+func notFoundError(err error) bool {
+	var apiErr *api.Error
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == 404
+	}
+	return false
 }
 
 func NewConsensusLayer(uri string, log log.Logger) (*ConsensusLayer, error) {

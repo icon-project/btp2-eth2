@@ -3,17 +3,19 @@ package eth2
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"strconv"
 	"testing"
 
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/ethereum/go-ethereum/common"
 	etypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	ssz "github.com/ferranbt/fastssz"
+	"github.com/icon-project/btp2/chain/icon/client"
 	"github.com/icon-project/btp2/common/codec"
 	"github.com/icon-project/btp2/common/link"
 	"github.com/icon-project/btp2/common/log"
@@ -23,24 +25,81 @@ import (
 	"github.com/icon-project/btp2-eth2/chain/eth2/proof"
 )
 
-func newTestReceiver(src, dest types.BtpAddress) *receiver {
+const (
+	iconEndpoint         = "https://berlin.net.solidwallet.io/api/v3/icon_dex"
+	ethNodeAddr          = "http://1.1.1.1"
+	ethExecutionEndpoint = ethNodeAddr + ":8545"
+	ethConsensusEndpoint = ethNodeAddr + ":9596"
+
+	iconBMC        = "cxb61b42e51c20054b4f5fd31b7d64af8c59579829"
+	ethBMC         = "0xD99d2A85E9B0Fa3E7fbA4756699f4307BFBb80c3"
+	btpAddressICON = "btp://0x3.icon/" + iconBMC
+	btpAddressETH  = "btp://0xaa36a7.eth2/" + ethBMC
+)
+
+func newTestEthReceiver() *receiver {
 	r := newReceiver(
-		src,
-		dest,
-		"https://sepolia.infura.io/v3/ffbf8ebe228f4758ae82e175640275e0",
+		types.BtpAddress(btpAddressETH),
+		types.BtpAddress(btpAddressICON),
+		ethExecutionEndpoint,
 		map[string]interface{}{
-			"consensus_endpoint": "http://20.20.5.191:9596",
+			"consensus_endpoint": ethConsensusEndpoint,
 		},
-		log.WithFields(log.Fields{log.FieldKeyPrefix: "test"}),
+		log.WithFields(log.Fields{log.FieldKeyPrefix: ""}),
 	)
 	return r.(*receiver)
 }
 
+func iconGetStatus() (*types.BMCLinkStatus, error) {
+	c := client.NewClient(iconEndpoint, log.WithFields(log.Fields{log.FieldKeyPrefix: "test"}))
+	p := &client.CallParam{
+		ToAddress: client.Address(iconBMC),
+		DataType:  "call",
+		Data: client.CallData{
+			Method: client.BMCGetStatusMethod,
+			Params: client.BMCStatusParams{
+				Target: btpAddressETH,
+			},
+		},
+	}
+	bs := &client.BMCStatus{}
+	err := client.MapError(c.Call(p, bs))
+	if err != nil {
+		return nil, err
+	}
+	ls := &types.BMCLinkStatus{}
+	if ls.TxSeq, err = bs.TxSeq.Value(); err != nil {
+		return nil, err
+	}
+	if ls.RxSeq, err = bs.RxSeq.Value(); err != nil {
+		return nil, err
+	}
+	if ls.Verifier.Height, err = bs.Verifier.Height.Value(); err != nil {
+		return nil, err
+	}
+	if ls.Verifier.Extra, err = bs.Verifier.Extra.Value(); err != nil {
+		return nil, err
+	}
+	return ls, nil
+}
+
+//func TestReceiver_RunMonitoring(t *testing.T) {
+//	eth := newTestEthReceiver()
+//	defer eth.Stop()
+//
+//	bls, err := iconGetStatus()
+//	assert.NoError(t, err)
+//
+//	wg := sync.WaitGroup{}
+//	wg.Add(1)
+//	go func() {
+//		eth.Monitoring(bls)
+//	}()
+//	wg.Wait()
+//}
+
 func TestReceiver_BlockUpdate(t *testing.T) {
-	r := newTestReceiver(
-		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
-		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
-	)
+	r := newTestEthReceiver()
 	defer r.Stop()
 
 	tests := []struct {
@@ -114,10 +173,7 @@ func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
 }
 
 func TestReceiver_BlockProof(t *testing.T) {
-	r := newTestReceiver(
-		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
-		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
-	)
+	r := newTestEthReceiver()
 	defer r.Stop()
 
 	tests := []struct {
@@ -216,21 +272,24 @@ func TestReceiver_BlockProof(t *testing.T) {
 }
 
 func TestReceiver_MessageProof(t *testing.T) {
-	slot := int64(2091171)
-	r := newTestReceiver(
-		types.BtpAddress("btp://0xaa36a7.eth/0x11167e875E08a113706e8bA3010ac37329b0E6b2"),
-		types.BtpAddress("btp://0x42.icon/cx8642ab29e608915b43e677d9bcb17ec902b4ec8b"),
-	)
+	slot := int64(4289613)
+	r := newTestEthReceiver()
 	defer r.Stop()
 
 	bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(slot, 10))
 	assert.NoError(t, err)
-	header := &capella.LightClientHeader{
+	header := &deneb.LightClientHeader{
 		Beacon: bh.Header.Message,
 	}
 
+	bn, err := r.cl.SlotToBlockNumber(bh.Header.Message.Slot)
+	blockNum := big.NewInt(int64(bn))
+	assert.NoError(t, err)
+	logs, err := r.getBTPLogs(blockNum, blockNum)
+	assert.NoError(t, err)
+
 	var mp *messageProofData
-	mp, err = r.makeMessageProofData(header, nil)
+	mp, err = r.makeMessageProofData(header, logs)
 	assert.NoError(t, err)
 
 	// verify receiptsRoot
@@ -242,20 +301,21 @@ func TestReceiver_MessageProof(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(
 		t,
-		block.Capella.Message.Body.ExecutionPayload.ReceiptsRoot[:],
+		block.Deneb.Message.Body.ExecutionPayload.ReceiptsRoot[:],
 		mp.ReceiptsRootProof.Leaf[:],
 	)
 
 	// verify receipt
 	receiptsRoot := common.BytesToHash(mp.ReceiptsRootProof.Leaf)
 	for _, rp := range mp.ReceiptProofs {
-		nl := new(light.NodeList)
+		//nl := trienode.NewProofSet()
+		nl := new(trienode.ProofList)
 		err = rlp.DecodeBytes(rp.Proof, nl)
 		assert.NoError(t, err)
 		value, err := trie.VerifyProof(
 			receiptsRoot,
 			rp.Key,
-			nl.NodeSet(),
+			nl.Set(),
 		)
 		assert.NoError(t, err)
 		var idx uint64
@@ -282,4 +342,33 @@ func receiptFromBytes(bs []byte) (*etypes.Receipt, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+func TestReceiver_makeReceiptsRootProof(t *testing.T) {
+	slot := int64(4289613)
+	r := newTestEthReceiver()
+	defer r.Stop()
+
+	bh, err := r.cl.BeaconBlockHeader(strconv.FormatInt(slot, 10))
+	assert.NoError(t, err)
+
+	p, err := r.makeReceiptsRootProof(slot)
+	assert.NoError(t, err)
+	//fmt.Printf("%+v\n", p)
+
+	// verify receiptsRoot
+	ok, err := ssz.VerifyProof(bh.Header.Message.StateRoot[:], p)
+	assert.True(t, ok)
+	assert.NoError(t, err)
+	fmt.Printf("%#x\n", p.Leaf[:])
+
+	block, err := r.cl.BeaconBlock(fmt.Sprintf("%d", slot))
+	fmt.Printf("%#x\n", block.Deneb.Message.Body.ExecutionPayload.ReceiptsRoot[:])
+	assert.NoError(t, err)
+	assert.Equal(
+		t,
+		block.Deneb.Message.Body.ExecutionPayload.ReceiptsRoot[:],
+		p.Leaf[:],
+	)
+
 }
