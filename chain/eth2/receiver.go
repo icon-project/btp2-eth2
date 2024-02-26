@@ -25,8 +25,8 @@ import (
 	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -500,7 +500,8 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	r.l.Debugf("Start ethereum monitoring")
 	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
 		if event.Topic == client.TopicLCOptimisticUpdate {
-			update := event.Data.(*deneb.LightClientOptimisticUpdate)
+			//update := event.Data.(*deneb.LightClientOptimisticUpdate)
+			update, err := client.ToLightClientOptimisticUpdate(event.Data.(*spec.VersionedLCOptimisticUpdate))
 			slot := int64(update.AttestedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client optimistic update. slot:%d", slot)
 			once.Do(func() {
@@ -549,7 +550,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 
 				r.addCheckPointsByRange(fSlot, slot-1)
 			})
-			mp, err := r.messageProofDataFromHeader(update.AttestedHeader)
+			mp, err := r.messageProofDataFromHeader(update)
 			if err != nil {
 				r.l.Warnf("fail to make messageProofData. %+v", err)
 				return
@@ -560,7 +561,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			}
 			r.addCheckPoint(update.AttestedHeader.Beacon)
 		} else if event.Topic == client.TopicLCFinalityUpdate {
-			update := event.Data.(*deneb.LightClientFinalityUpdate)
+			update, err := client.ToLightClientFinalityUpdate(event.Data.(*spec.VersionedLCFinalityUpdate))
+			if err != nil {
+				r.l.Panicf("failed to convert Finality Update. %+v", err)
+			}
 			slot := int64(update.FinalizedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client finality update. slot:%d", slot)
 			if !IsCheckPoint(update.FinalizedHeader.Beacon.Slot) {
@@ -621,7 +625,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 	return nil
 }
 
-func validateFinalityUpdate(u *deneb.LightClientFinalityUpdate) error {
+func validateFinalityUpdate(u *client.LightClientFinalityUpdate) error {
 	if u.FinalizedHeader.Beacon.Slot > u.AttestedHeader.Beacon.Slot {
 		return errors.Errorf("invalid slot. finalized header > attested header")
 	}
@@ -652,7 +656,7 @@ func validateFinalityUpdate(u *deneb.LightClientFinalityUpdate) error {
 
 func (r *receiver) makeBlockUpdateDatas(
 	bls *types.BMCLinkStatus,
-	update *deneb.LightClientFinalityUpdate,
+	update *client.LightClientFinalityUpdate,
 ) ([]*blockUpdateData, error) {
 	var nsc *altair.SyncCommittee
 	var nscBranch [][]byte
@@ -669,8 +673,8 @@ func (r *receiver) makeBlockUpdateDatas(
 		for _, lcu := range lcUpdate {
 			r.l.Debugf("make old blockUpdateData for lightClient update. scPeriod=%d", SlotToSyncCommitteePeriod(lcu.SignatureSlot))
 			bud := &blockUpdateData{
-				AttestedHeader:          lcu.AttestedHeader.ToAltair(),
-				FinalizedHeader:         lcu.FinalizedHeader.ToAltair(),
+				AttestedHeader:          lcu.AttestedHeader,
+				FinalizedHeader:         lcu.FinalizedHeader,
 				FinalizedHeaderBranch:   lcu.FinalityBranch,
 				SyncAggregate:           lcu.SyncAggregate,
 				SignatureSlot:           lcu.SignatureSlot,
@@ -695,8 +699,8 @@ func (r *receiver) makeBlockUpdateDatas(
 	// append blockUpdateData made by FinalityUpdate
 	r.l.Debugf("make blockUpdateData for finality update")
 	bud := &blockUpdateData{
-		AttestedHeader:          update.AttestedHeader.ToAltair(),
-		FinalizedHeader:         update.FinalizedHeader.ToAltair(),
+		AttestedHeader:          update.AttestedHeader,
+		FinalizedHeader:         update.FinalizedHeader,
 		FinalizedHeaderBranch:   update.FinalityBranch,
 		SyncAggregate:           update.SyncAggregate,
 		SignatureSlot:           update.SignatureSlot,
@@ -748,7 +752,7 @@ func (r *receiver) messageProofDatasByRange(fromSlot, fromSeq, toSlot, toSeq int
 			return nil, errors.NotFoundError.Errorf("there is no header for %d", slot)
 		}
 
-		mp, err := r.makeMessageProofData(&deneb.LightClientHeader{Beacon: bh.Header.Message}, logs)
+		mp, err := r.makeMessageProofData(client.LightClientHeaderFromBeaconBlockHeader(bh), logs)
 		if err != nil {
 			return nil, err
 		}
@@ -766,8 +770,8 @@ func (r *receiver) messageProofDatasByRange(fromSlot, fromSeq, toSlot, toSeq int
 	return mps, nil
 }
 
-func (r *receiver) messageProofDataFromHeader(header *deneb.LightClientHeader) (*messageProofData, error) {
-	bn := big.NewInt(int64(header.Execution.BlockNumber))
+func (r *receiver) messageProofDataFromHeader(header client.LightClientHeader) (*messageProofData, error) {
+	bn := big.NewInt(int64(header.BlockNumber()))
 	logs, err := r.getBTPLogs(bn, bn)
 	if err != nil {
 		return nil, err
@@ -801,13 +805,13 @@ func (r *receiver) messageProofDataFromHeader(header *deneb.LightClientHeader) (
 	if len(logs) == 0 {
 		return nil, nil
 	}
-	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d", len(logs), header.Beacon.Slot, bn)
+	r.l.Debugf("Get %d BTP messages at slot:%d, blockNum:%d", len(logs), header.Slot(), bn)
 	return r.makeMessageProofData(header, logs)
 }
 
 // makeMessageProofData make messageProofData with LightClientHeader and logs.
-func (r *receiver) makeMessageProofData(header *deneb.LightClientHeader, logs []etypes.Log) (mp *messageProofData, err error) {
-	slot := int64(header.Beacon.Slot)
+func (r *receiver) makeMessageProofData(header client.LightClientHeader, logs []etypes.Log) (mp *messageProofData, err error) {
+	slot := int64(header.Slot())
 	if len(logs) == 0 {
 		return
 	}
@@ -1002,7 +1006,7 @@ func (r *receiver) addCheckPointsByRange(from, to int64) {
 	}
 }
 
-func (r *receiver) validateMessageProofData(bls *types.BMCLinkStatus, update *deneb.LightClientFinalityUpdate) error {
+func (r *receiver) validateMessageProofData(bls *types.BMCLinkStatus, update *client.LightClientFinalityUpdate) error {
 	aSlot := int64(update.AttestedHeader.Beacon.Slot)
 	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
 	status, err := r.getStatus()

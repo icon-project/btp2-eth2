@@ -27,7 +27,7 @@ import (
 	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	etypes "github.com/ethereum/go-ethereum/core/types"
@@ -269,9 +269,12 @@ func (s *sender) getStatus(bn uint64) (*types.BMCLinkStatus, error) {
 
 func (s *sender) handleFinalityUpdate() {
 	if err := s.cl.Events([]string{client.TopicLCFinalityUpdate}, func(event *api.Event) {
-		update := event.Data.(*deneb.LightClientFinalityUpdate)
+		update, err := client.ToLightClientFinalityUpdate(event.Data.(*spec.VersionedLCFinalityUpdate))
+		if err != nil {
+			s.l.Panicf("failed to convert Finality Update. %+v", err)
+		}
 		s.l.Debugf("handle finality_update event slot:%d", update.FinalizedHeader.Beacon.Slot)
-		s.checkRelayResult(update.FinalizedHeader.Execution.BlockNumber)
+		s.checkRelayResult(update.FinalizedBlockNumber)
 	}); err != nil {
 		s.l.Panicf("onError %v", err)
 	}

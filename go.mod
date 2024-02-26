@@ -2,7 +2,7 @@ module github.com/icon-project/btp2-eth2
 
 go 1.20
 
-replace github.com/attestantio/go-eth2-client => github.com/icon-project/go-eth2-client v0.8.0
+replace github.com/attestantio/go-eth2-client => github.com/icon-project/go-eth2-client v0.9.0
 
 require (
 	github.com/attestantio/go-eth2-client v0.0.0-00010101000000-000000000000

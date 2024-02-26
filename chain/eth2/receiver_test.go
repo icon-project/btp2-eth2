@@ -27,7 +27,7 @@ import (
 
 const (
 	iconEndpoint         = "https://berlin.net.solidwallet.io/api/v3/icon_dex"
-	ethNodeAddr          = "http://1.1.1.1"
+	ethNodeAddr          = "http://35.73.133.230"
 	ethExecutionEndpoint = ethNodeAddr + ":8545"
 	ethConsensusEndpoint = ethNodeAddr + ":9596"
 
@@ -165,7 +165,7 @@ func TestReceiver_BlockUpdate(t *testing.T) {
 func VerifySyncAggregate(t *testing.T, r *receiver, bu *blockUpdateData) {
 	// TODO implement
 	//lcu, err := r.cl.LightClientUpdates(
-	//	SlotToSyncCommitteePeriod(bu.FinalizedHeader.Beacon.Slot)-SlotPerSyncCommitteePeriod,
+	//	SlotToSyncCommitteePeriod(bu.FinalizedHeader.beacon.Slot)-SlotPerSyncCommitteePeriod,
 	//	1,
 	//)
 	//assert.NoError(t, err)

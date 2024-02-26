@@ -13,7 +13,6 @@ import (
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/http"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/icon-project/btp2/common/log"
 	"github.com/pkg/errors"
@@ -91,7 +90,7 @@ func (c *ConsensusLayer) Events(topics []string, handler eth2client.EventHandler
 	return c.service.(eth2client.EventsProvider).Events(c.ctx, topics, handler)
 }
 
-func (c *ConsensusLayer) LightClientBootstrap(blockRoot phase0.Root) (*deneb.LightClientBootstrap, error) {
+func (c *ConsensusLayer) LightClientBootstrap(blockRoot phase0.Root) (*LightClientBootstrap, error) {
 	resp, err := c.service.(*http.Service).LightClientBootstrap(
 		c.ctx,
 		&api.LightClientBootstrapOpts{Block: fmt.Sprintf("%#x", blockRoot)},
@@ -99,10 +98,10 @@ func (c *ConsensusLayer) LightClientBootstrap(blockRoot phase0.Root) (*deneb.Lig
 	if err != nil {
 		return nil, err
 	}
-	return resp.Data, err
+	return toLightClientBootstrap(resp.Data)
 }
 
-func (c *ConsensusLayer) LightClientUpdates(startPeriod, count uint64) ([]*deneb.LightClientUpdate, error) {
+func (c *ConsensusLayer) LightClientUpdates(startPeriod, count uint64) ([]*LightClientUpdate, error) {
 	resp, err := c.service.(*http.Service).LightClientUpdates(
 		c.ctx,
 		&api.LightClientUpdatesOpts{StartPeriod: startPeriod, Count: count},
@@ -110,26 +109,31 @@ func (c *ConsensusLayer) LightClientUpdates(startPeriod, count uint64) ([]*deneb
 	if err != nil {
 		return nil, err
 	}
-	return resp.Data, err
+	ret := make([]*LightClientUpdate, 0)
+	for _, d := range resp.Data {
+		if u, err := toLightClientUpdate(d); err != nil {
+			return nil, err
+		} else {
+			ret = append(ret, u)
+		}
+	}
+	return ret, err
 }
 
-func (c *ConsensusLayer) LightClientOptimisticUpdate() (*deneb.LightClientOptimisticUpdate, error) {
+func (c *ConsensusLayer) LightClientOptimisticUpdate() (*LightClientOptimisticUpdate, error) {
 	resp, err := c.service.(*http.Service).LightClientOptimisticUpdate(c.ctx, &api.CommonOpts{})
 	if err != nil {
 		return nil, err
 	}
-	return resp.Data, err
+	return ToLightClientOptimisticUpdate(resp.Data)
 }
 
-type LightClientFinalityUpdate struct {
-}
-
-func (c *ConsensusLayer) LightClientFinalityUpdate() (*deneb.LightClientFinalityUpdate, error) {
+func (c *ConsensusLayer) LightClientFinalityUpdate() (*LightClientFinalityUpdate, error) {
 	resp, err := c.service.(*http.Service).LightClientFinalityUpdate(c.ctx, &api.CommonOpts{})
 	if err != nil {
 		return nil, err
 	}
-	return resp.Data, err
+	return ToLightClientFinalityUpdate(resp.Data)
 }
 
 func (c *ConsensusLayer) GetStateProofWithGIndex(stateId string, gindex uint64) ([]byte, error) {
