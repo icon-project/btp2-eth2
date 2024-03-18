@@ -586,7 +586,9 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				return
 			}
 			// update with new value
-			update = fu
+			if retry > 0 {
+				update = fu
+			}
 			if err = validateFinalityUpdate(update); err != nil {
 				r.l.Debugf("invalid finality update. %v", err)
 				if retry < maxFinalityUpdateRetry {
