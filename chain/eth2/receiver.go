@@ -498,6 +498,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 
 	eth2Topics := []string{client.TopicLCOptimisticUpdate, client.TopicLCFinalityUpdate}
 	r.l.Debugf("Start ethereum monitoring")
+	var lastFinalityUpdate *phase0.BeaconBlockHeader
 	if err := r.cl.Events(eth2Topics, func(event *api.Event) {
 		if event.Topic == client.TopicLCOptimisticUpdate {
 			//update := event.Data.(*deneb.LightClientOptimisticUpdate)
@@ -568,10 +569,10 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 			slot := int64(update.FinalizedHeader.Beacon.Slot)
 			r.l.Debugf("Get light client finality update. slot:%d", slot)
 			if !IsCheckPoint(update.FinalizedHeader.Beacon.Slot) {
-				r.l.Debugf("skip slot %d has no block", slot)
+				r.l.Debugf("skip slot %d since it is not checkpoint", slot)
 				return
 			}
-			if bls.Verifier.Height >= slot {
+			if lastFinalityUpdate != nil && lastFinalityUpdate.StateRoot == update.FinalizedHeader.Beacon.StateRoot {
 				r.l.Debugf("skip already processed finality update")
 				return
 			}
@@ -601,6 +602,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 					return
 				}
 			}
+			lastFinalityUpdate = update.FinalizedHeader.Beacon
 			buds, err := r.makeBlockUpdateDatas(bls, update)
 			if err != nil {
 				r.l.Warnf("failed to make blockUpdateData. %+v", err)
