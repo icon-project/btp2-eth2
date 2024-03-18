@@ -586,7 +586,9 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 				return
 			}
 			// update with new value
-			update = fu
+			if retry > 0 {
+				update = fu
+			}
 			if err = validateFinalityUpdate(update); err != nil {
 				r.l.Debugf("invalid finality update. %v", err)
 				if retry < maxFinalityUpdateRetry {
@@ -1007,13 +1009,17 @@ func (r *receiver) addCheckPointsByRange(from, to int64) {
 }
 
 func (r *receiver) validateMessageProofData(bls *types.BMCLinkStatus, update *client.LightClientFinalityUpdate) error {
-	aSlot := int64(update.AttestedHeader.Beacon.Slot)
-	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
 	status, err := r.getStatus()
 	if err != nil {
 		return err
 	}
+	if status.TxSeq == bls.RxSeq {
+		// there are no BTP messages
+		return nil
+	}
 
+	aSlot := int64(update.AttestedHeader.Beacon.Slot)
+	fSlot := int64(update.FinalizedHeader.Beacon.Slot)
 	valid := false
 	r.l.Debugf("validate messageProofDatas at aSlot:%d, fSlot:%d, rStatus:%+v, bls:%+v.", aSlot, fSlot, status, bls)
 	if cp, ok := r.cp[fSlot]; ok {
