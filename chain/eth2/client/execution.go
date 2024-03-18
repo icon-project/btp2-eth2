@@ -64,7 +64,8 @@ func (c *ExecutionLayer) NewTransactOpts(k *ecdsa.PrivateKey, gasLimit uint64) (
 	}
 	txo.GasTipCap = tipCap.Div(tipCap, big.NewInt(int64(len(fh.Reward))))
 
-	baseFee := fh.BaseFee[len(fh.BaseFee)-1]
+	baseFee := new(big.Int).Mul(fh.BaseFee[len(fh.BaseFee)-1], big.NewInt(110))
+	baseFee = new(big.Int).Div(baseFee, big.NewInt(100))
 	if baseFee.Sign() == 1 {
 		txo.GasFeeCap = new(big.Int).Add(baseFee, tipCap)
 	}
