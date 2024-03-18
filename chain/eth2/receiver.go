@@ -521,7 +521,6 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 					r.l.Panicf("failed to get Finality Update. %+v", err)
 				}
 				fSlot := int64(fu.FinalizedHeader.Beacon.Slot)
-				r.l.Debugf("Find undelivered messages with: %+v, %+v", bls, extra)
 				var fromSlot int64
 				if extra.LastMsgSeq != 0 {
 					fromSlot = extra.LastMsgSlot + 1
@@ -529,6 +528,7 @@ func (r *receiver) Monitoring(bls *types.BMCLinkStatus) error {
 					fromSlot = bls.Verifier.Height + 1
 				}
 				if bls.RxSeq < status.TxSeq {
+					r.l.Debugf("Find undelivered messages with: %+v, %+v", bls, extra)
 					mps, err := r.messageProofDatasByRange(
 						fromSlot, bls.RxSeq+1,
 						slot-1, status.TxSeq,
